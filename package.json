@@ -1,0 +1,44 @@
+{
+  "name": "loredown",
+  "version": "0.1.0",
+  "description": "Your repo's institutional memory — a team knowledge base maintained by AI coding agents, versioned in git.",
+  "keywords": [
+    "knowledge-base",
+    "ai-agents",
+    "claude-code",
+    "cursor",
+    "codex",
+    "agents-md",
+    "team-memory",
+    "wiki",
+    "markdown"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "loredown": "./dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "tsx src/cli.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check .",
+    "format": "biome format --write ."
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.3",
+    "@types/node": "^26.1.1",
+    "tsx": "^4.23.1",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
+  }
+}
