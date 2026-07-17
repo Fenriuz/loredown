@@ -1,43 +1,54 @@
 import { readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { COMMANDS, run } from "../src/main.js";
+import { run } from "../src/main.js";
 import { VERSION } from "../src/version.js";
 
-describe("run", () => {
+const DIRTY = fileURLToPath(new URL("fixtures/dirty/lore", import.meta.url));
+
+describe("cli basics", () => {
   it("prints usage with no args and with --help", () => {
-    for (const argv of [[], ["--help"], ["-h"]]) {
+    for (const argv of [[], ["--help"], ["-h"], ["lint", "-h"]]) {
       const result = run(argv);
       expect(result.code).toBe(0);
       expect(result.stdout).toContain("Usage: loredown");
-      expect(result.stderr).toBe("");
     }
   });
 
   it("prints the version with --version", () => {
-    for (const argv of [["--version"], ["-v"]]) {
-      const result = run(argv);
-      expect(result.code).toBe(0);
-      expect(result.stdout).toBe(VERSION);
-    }
+    expect(run(["--version"])).toEqual({ code: 0, stdout: VERSION, stderr: "" });
   });
 
-  it("stubs every known command with exit code 3", () => {
-    for (const command of COMMANDS) {
-      const result = run([command]);
-      expect(result.code).toBe(3);
-      expect(result.stderr).toContain(command);
-      expect(result.stderr).toContain("not implemented");
-    }
+  it("rejects unknown commands and options with exit code 2", () => {
+    expect(run(["frobnicate"]).code).toBe(2);
+    expect(run(["lint", "--frobnicate"]).code).toBe(2);
+    expect(run(["--lore"]).code).toBe(2); // missing value
   });
 
-  it("rejects unknown commands with exit code 2", () => {
-    const result = run(["frobnicate"]);
+  it("fails with guidance when no lore/ exists", () => {
+    const result = run(["lint"], tmpdir());
     expect(result.code).toBe(2);
-    expect(result.stderr).toContain("Unknown command: frobnicate");
+    expect(result.stderr).toContain("loredown init");
   });
 
-  it("is deterministic: same argv, same result", () => {
-    expect(run(["lint"])).toEqual(run(["lint"]));
+  it("exits 1 on lint errors and emits stable JSON", () => {
+    const result = run(["lint", "--json", "--lore", DIRTY]);
+    expect(result.code).toBe(1);
+    const parsed = JSON.parse(result.stdout) as {
+      version: number;
+      findings: unknown[];
+      summary: { errors: number; warnings: number };
+    };
+    expect(parsed.version).toBe(1);
+    expect(parsed.summary.errors).toBeGreaterThan(0);
+    expect(parsed.summary.warnings).toBeGreaterThan(0);
+  });
+
+  it("reports a stale index via index --check with exit 1", () => {
+    const result = run(["index", "--check", "--lore", DIRTY]);
+    expect(result.code).toBe(1);
+    expect(result.stdout).toContain("stale");
   });
 });
 

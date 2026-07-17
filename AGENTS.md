@@ -27,9 +27,8 @@ constraints that the code cannot tell you.
 - **Task end:** if you learned something a future agent could NOT derive from
   the repo (a decision and its why, a failed approach, an external constraint,
   a gotcha), add or update at most 3 pages under lore/pages/, then run
-  `npx loredown index && npx loredown lint` and include the changes in your PR.
-  (Until Phase 2 lands, follow the page format in SPEC.md §3 and update
-  lore/index.md by hand in the same style.)
+  `npm run dev -- index && npm run dev -- lint` (this repo runs the CLI from
+  source) and include the changes in your PR.
 - **Never store:** how the code works, file layouts, or anything reproducible
   by reading the repo.
 <!-- loredown:end -->

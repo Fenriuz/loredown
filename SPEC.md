@@ -2,7 +2,7 @@
 
 loredown is a framework where AI coding agents maintain a team knowledge base — the *lore* — as markdown inside the git repository. Agents write it, humans review it in pull requests, and a deterministic CLI validates it. This document is the authority for the schema, the operations, and the CLI; every implementation decision traces back to it.
 
-**Positioning:** the repo's institutional memory — everything git can't tell you. loredown is *not* documentation-from-code (DeepWiki's job), *not* per-user agent memory (the vendors' job), and *not* a specs/planning tool (spec-kit's job).
+**Positioning:** the repo's institutional memory — everything git can't tell you. loredown is *not* documentation-from-code (the DeepWiki/graphify lane — those derive knowledge *from* artifacts; loredown holds what no artifact records), *not* per-user agent memory (the vendors' job), and *not* a specs/planning tool (spec-kit's job). Code-derived tools coexist cleanly: graphify-style indexers ingest `lore/` pages as ordinary markdown, so the lore rides along in their graphs for free.
 
 ---
 
@@ -41,6 +41,8 @@ lore/
 ## 3. Page format
 
 A page is one markdown file = one durable fact, with YAML frontmatter and a short body.
+
+Frontmatter and config use a **strict, documented subset of YAML**: plain scalars, quoted strings, two-space nesting, `- ` lists of scalars or flat maps, `[a, b]` flow lists, and `#` comments. The CLI parses this subset with zero dependencies and rejects anything outside it with a line-numbered error. Values containing ` #` or `: ` sequences must be quoted (e.g. `task: "PR #123"`).
 
 ```markdown
 ---
@@ -238,9 +240,9 @@ v0.1 ships a single root `lore/`. The scoping extension, so the schema doesn't p
 |---|---|---|
 | `init [--seed]` | Create `lore/` skeleton (config, empty index, log shard). `--seed` prints the guided bootstrap instructions for the user's agent (Phase 4). | 0 / 2 |
 | `new <kind> <slug>` | Scaffold a page with template + prefilled frontmatter (dates, provenance from git config, HEAD sha) — agents make fewer schema errors when the skeleton is generated. | 0 / 2 |
-| `lint` | All checks of §3–§8: schema, id↔path, kinds, dates, sources present, wiki-links resolve, budgets, near-dup titles, instruction scan, secret scan, index freshness, supersedes consistency, log format. | 0 clean / 1 findings / 2 usage |
+| `lint` | All checks of §3–§8: schema, id↔path, kinds, dates, sources present, wiki-links resolve, budgets, near-dup titles, instruction scan, secret scan, index freshness, supersedes consistency, log format. | 0 clean or warnings only / 1 errors / 2 usage |
 | `index [--check]` | Rebuild `index.md` deterministically; `--check` verifies without writing (CI). | 0 / 1 (check failed) / 2 |
-| `drift` | §9 checks against git HEAD. | 0 / 1 / 2 |
+| `drift` | §9 checks against git HEAD. | 0 clean / 1 any finding / 2 usage |
 | `trace <id>` | Print a page's provenance, sources with current drift status, inbound links, and log entries mentioning it. | 0 / 2 |
 
 Error output goes to stderr; findings go to stdout (human format or `--json`).
