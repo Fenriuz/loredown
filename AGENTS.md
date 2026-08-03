@@ -9,7 +9,9 @@ knowledge base lives in `lore/` and follows this repo's own spec.
 - **SPEC.md is the authority.** Code implements the spec. If an implementation needs different
   behavior, change SPEC.md first (and get it reviewed), then change the code.
 - Commands: `npm test` (Vitest) · `npm run typecheck` · `npm run lint` (Biome) ·
-  `npm run format` · `npm run dev -- <args>` (run the CLI from source).
+  `npm run format` · `npm run dev -- <args>` (run the CLI from source) ·
+  `npm run eval` (agent evals — needs the `claude` CLI and credentials; costs
+  tokens and minutes; never wire it into `npm test` or CI).
 - **Runtime dependencies: currently zero.** Any addition needs explicit justification in the
   PR — a small supply-chain surface is a product feature, not an accident.
 - **Determinism is a contract.** Generators must produce byte-identical output for identical

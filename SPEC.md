@@ -279,7 +279,7 @@ Config is data only. **No config key will ever name an executable or shell comma
 
 1. **Unit tests** (Vitest) for every check and generator.
 2. **Golden-file tests**: fixture `lore/` trees → expected lint findings (`--json`) and expected byte-exact `index.md`. The fixtures are the spec's executable examples; a future port to another language must pass the same goldens.
-3. **Agent evals** (Phase 5): scripted scenarios against a real agent (Claude Code headless) — ingest a synthetic task and assert: index updated, links valid, no duplicate page, page count within budget, *nothing derivable stored* (judged by a rubric); drift scenario; query-with-citations scenario.
+3. **Agent evals**: scripted scenarios against a real agent (Claude Code headless) — ingest a synthetic task and assert: index updated, links valid, no duplicate page, page count within budget, *nothing derivable stored* (judged by an LLM rubric); drift re-verification scenario; query-with-citations scenario. Run with `npm run eval` — deliberately not part of `npm test`, since it needs the `claude` CLI, credentials, minutes, and tokens. The agent runs with scoped permissions (`acceptEdits` + allow-listed `loredown`/`git` Bash), never `bypassPermissions`.
 
 ## 19. Open questions (for review)
 
