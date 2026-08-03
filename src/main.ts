@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { basename, join } from "node:path";
+import { basename, dirname, join } from "node:path";
+import { installAdapter } from "./adapters.js";
 import { driftLore } from "./drift.js";
 import { type Finding, formatHuman, formatJson, summarize } from "./findings.js";
 import { generateIndex } from "./index-gen.js";
@@ -16,7 +17,7 @@ export interface RunResult {
   stderr: string;
 }
 
-export const COMMANDS = ["init", "new", "lint", "index", "drift", "trace"] as const;
+export const COMMANDS = ["init", "new", "lint", "index", "drift", "trace", "install"] as const;
 
 const USAGE = `loredown ${VERSION} — your repo's institutional memory, maintained by coding agents.
 
@@ -29,6 +30,7 @@ Commands:
   index [--check]      Deterministically rebuild lore/index.md (--check: verify only)
   drift                Flag pages whose source anchors changed since verification
   trace <id>           Show a page's provenance, sources, inbound links, log mentions
+  install <tool>       Install an agent adapter: claude-code | codex | cursor
 
 Options:
   --lore <path>        Explicit lore directory (default: walk up from cwd)
@@ -148,10 +150,34 @@ export function run(argv: readonly string[], cwd = process.cwd()): RunResult {
     case "init": {
       const month = new Date().toISOString().slice(0, 7);
       const result = initLore(cwd, flags.dryRun, month);
-      if (result.error !== undefined) return usageError(result.error);
+      if (result.error !== undefined) {
+        // `init --seed` on an existing lore/ is a request for the guide, not a mistake.
+        if (flags.seed) return { code: 0, stdout: SEED_GUIDE, stderr: "" };
+        return usageError(result.error);
+      }
       const verb = flags.dryRun ? "would create" : "created";
       const lines = result.created.map((f) => `${verb} ${f}`);
       if (flags.seed) lines.push("", SEED_GUIDE);
+      return { code: 0, stdout: lines.join("\n"), stderr: "" };
+    }
+
+    case "install": {
+      const tool = positional[1];
+      if (tool === undefined)
+        return usageError("usage: loredown install <claude-code|codex|cursor>");
+      const located = requireLore(cwd, flags);
+      if ("code" in located) return located;
+      const root = dirname(located.load.loreDir);
+      const result = installAdapter(root, tool, flags.dryRun);
+      if (result.error !== undefined) return usageError(result.error);
+      const lines = result.actions.map(
+        ({ path, action }) =>
+          `${flags.dryRun && action !== "unchanged" ? `would be ${action}` : action}  ${path}`,
+      );
+      lines.push(
+        "",
+        `adapter "${tool}" ${flags.dryRun ? "preview" : "installed"} — commit these files to share with the team`,
+      );
       return { code: 0, stdout: lines.join("\n"), stderr: "" };
     }
 

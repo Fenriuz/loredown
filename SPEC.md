@@ -244,6 +244,7 @@ v0.1 ships a single root `lore/`. The scoping extension, so the schema doesn't p
 | `index [--check]` | Rebuild `index.md` deterministically; `--check` verifies without writing (CI). | 0 / 1 (check failed) / 2 |
 | `drift` | §9 checks against git HEAD. | 0 clean / 1 any finding / 2 usage |
 | `trace <id>` | Print a page's provenance, sources with current drift status, inbound links, and log entries mentioning it. | 0 / 2 |
+| `install <tool>` | Idempotently install an agent adapter (§12): fenced block in AGENTS.md, tool-specific files. Fences are upserted; content outside them is never touched. | 0 / 2 |
 
 Error output goes to stderr; findings go to stdout (human format or `--json`).
 

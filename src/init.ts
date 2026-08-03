@@ -13,17 +13,29 @@ scan:
 kinds: []
 `;
 
-export const SEED_GUIDE = `Guided bootstrap (Phase 4 will automate this; for now, paste this to your coding agent):
+export const SEED_GUIDE = `Guided bootstrap — paste this to your coding agent:
 
-  Read lore/config.yaml. This repo keeps a team knowledge base in lore/:
-  one markdown file per fact under lore/pages/<kind>/ (kinds: decision,
-  constraint, gotcha, incident, glossary, map) with frontmatter fields
-  id, title, kind, status, created, updated, provenance{agent,actor,task}
-  and sources (path+sha or url+accessed). Interview me about this repo's
-  NON-DERIVABLE knowledge — decisions and their why, failed approaches,
-  external constraints, gotchas, domain terms — and file the first 5-10
-  pages. Only include knowledge you could NOT derive by reading the repo.
-  Then run: npx loredown index && npx loredown lint`;
+  This repo uses loredown: a team knowledge base of markdown pages in lore/
+  (one file per fact; kinds: decision, constraint, gotcha, incident,
+  glossary, map). Seed it by interviewing me, one topic at a time:
+
+    1. Which decisions would a new teammate question first? For each: what
+       was chosen, why, and what was rejected?
+    2. What breaks or surprises people here — gotchas, past incidents?
+    3. Which external constraints bind us (vendor limits, compliance,
+       platform quirks)?
+    4. Which domain terms have a project-specific meaning?
+
+  Apply the derivability test to every candidate fact: if you could learn it
+  by reading the repo, do NOT file it. Aim for 5-10 pages total.
+
+  File each fact with: npx loredown new <kind> <slug> --agent <your-tool>
+  --task seed — then fill the TODOs (body under 40 non-blank lines; anchor
+  claims to repo-relative path + short sha of HEAD, or url + accessed date).
+
+  Finish with: npx loredown index && npx loredown lint (fix any errors),
+  append "## [<date>] seed | lore | <actor>/<your-tool>" to
+  lore/log/<YYYY-MM>.md, and open a PR for the team to review.`;
 
 export interface InitResult {
   created: string[];
