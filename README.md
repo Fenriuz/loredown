@@ -1,5 +1,9 @@
 # loredown
 
+[![npm](https://img.shields.io/npm/v/loredown)](https://www.npmjs.com/package/loredown)
+[![CI](https://github.com/Fenriuz/loredown/actions/workflows/ci.yml/badge.svg)](https://github.com/Fenriuz/loredown/actions)
+[![license](https://img.shields.io/npm/l/loredown)](LICENSE)
+
 **Your repo's institutional memory — a team knowledge base maintained by AI coding agents, versioned in git.**
 
 Decisions and their *why*, failed approaches, external constraints, gotchas — the knowledge git can't tell you, kept next to the code that needs it. Agents write it, humans review it in ordinary pull requests, and a deterministic CLI validates it.
