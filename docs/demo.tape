@@ -4,7 +4,7 @@
 #   cd "$(mktemp -d)" && git init -q && vhs /path/to/loredown/docs/demo.tape
 #
 # Then commit the resulting docs/demo.gif and reference it from README.md as
-# https://raw.githubusercontent.com/loredown/loredown/main/docs/demo.gif
+# https://raw.githubusercontent.com/Fenriuz/loredown/main/docs/demo.gif
 
 Output docs/demo.gif
 

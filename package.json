@@ -17,10 +17,10 @@
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/loredown/loredown.git"
+    "url": "git+https://github.com/Fenriuz/loredown.git"
   },
-  "homepage": "https://github.com/loredown/loredown#readme",
-  "bugs": "https://github.com/loredown/loredown/issues",
+  "homepage": "https://github.com/Fenriuz/loredown#readme",
+  "bugs": "https://github.com/Fenriuz/loredown/issues",
   "publishConfig": {
     "access": "public"
   },
