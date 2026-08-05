@@ -40,4 +40,8 @@ loredown dogfoods itself. If your work surfaced knowledge a future contributor c
 1. Bump the version in `package.json` **and** `src/version.ts` (a test enforces the match).
 2. Update `CHANGELOG.md`.
 3. `npm publish` — `prepublishOnly` runs lint, typecheck, tests, and the build.
+   Expect your npm session to have expired (tokens are short-lived since the
+   2025 supply-chain incidents) — run `npm login` first. Treat any
+   `npm warn publish … removed` line as a release blocker (see
+   [[gotcha/npm-strips-dot-slash-bin]] in the lore).
 4. Tag (`git tag v<x.y.z>`) and create a GitHub release from the changelog entry.
