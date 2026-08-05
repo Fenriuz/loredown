@@ -99,11 +99,18 @@ export const TITLE_MAX = 80;
 /** Wiki-link syntax (SPEC §3): `[[target]]` or `[[target|display text]]`. */
 export const WIKILINK = /\[\[([^\]\n]+)\]\]/g;
 
-/** Split a wiki-link's inner text into target and optional display alias. */
-export function splitWikiLink(inner: string): { target: string; alias: string | null } {
+/** Split a wiki-link's inner text per the grammar `target(#heading)?(|display)?` (SPEC §3). */
+export function splitWikiLink(inner: string): {
+  target: string;
+  heading: string | null;
+  alias: string | null;
+} {
   const pipe = inner.indexOf("|");
-  if (pipe === -1) return { target: inner, alias: null };
-  return { target: inner.slice(0, pipe), alias: inner.slice(pipe + 1) };
+  const alias = pipe === -1 ? null : inner.slice(pipe + 1);
+  const full = pipe === -1 ? inner : inner.slice(0, pipe);
+  const hash = full.indexOf("#");
+  if (hash === -1) return { target: full, heading: null, alias };
+  return { target: full.slice(0, hash), heading: full.slice(hash + 1), alias };
 }
 
 export function isBuiltinKind(kind: string): kind is BuiltinKind {

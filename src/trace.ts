@@ -62,7 +62,10 @@ export function tracePage(load: LoadResult, id: string, cwd: string): string | n
   const inbound = load.pages
     .filter(
       (p) =>
-        p.id !== page.id && (p.body.includes(`[[${page.id}]]`) || p.body.includes(`[[${page.id}|`)),
+        p.id !== page.id &&
+        (p.body.includes(`[[${page.id}]]`) ||
+          p.body.includes(`[[${page.id}|`) ||
+          p.body.includes(`[[${page.id}#`)),
     )
     .map((p) => p.id)
     .sort(byteCompare);

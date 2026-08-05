@@ -7,7 +7,7 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
-import { basename, dirname, join, relative, resolve } from "node:path";
+import { basename, dirname, join, posix, relative, resolve } from "node:path";
 import { byteCompare } from "./findings.js";
 import { ParseError, splitFrontmatter, type YamlValue } from "./fm.js";
 import { git, headShortSha, pathExistsAtHead, repoRoot, userName } from "./git.js";
@@ -96,6 +96,54 @@ function collectPages(loreDir: string): { id: string; file: string }[] {
       if (entry.endsWith(".md"))
         out.push({ id: `${kindDir}/${entry.slice(0, -3)}`, file: join(dir, entry) });
     }
+  }
+  return out;
+}
+
+interface ExistingPage {
+  id: string;
+  file: string;
+  raw: string;
+  body: string;
+  bodyStartLine: number;
+  imported: boolean;
+  /** Original source path (first anchor) for imported pages — resolves their relative links. */
+  originPath: string | null;
+}
+
+/** Parse every existing page once; malformed pages are lint's problem, not import's. */
+function loadExistingPages(loreDir: string): ExistingPage[] {
+  const out: ExistingPage[] = [];
+  for (const page of collectPages(loreDir)) {
+    const raw = readFileSync(page.file, "utf8");
+    let doc: ReturnType<typeof splitFrontmatter>;
+    try {
+      doc = splitFrontmatter(raw);
+    } catch {
+      continue;
+    }
+    const imported = doc.frontmatter.imported === "true";
+    let originPath: string | null = null;
+    const sources = doc.frontmatter.sources;
+    const first = Array.isArray(sources) ? sources[0] : undefined;
+    if (
+      imported &&
+      first !== undefined &&
+      typeof first === "object" &&
+      !Array.isArray(first) &&
+      typeof first.path === "string"
+    ) {
+      originPath = first.path;
+    }
+    out.push({
+      id: page.id,
+      file: page.file,
+      raw,
+      body: doc.body,
+      bodyStartLine: doc.bodyStartLine,
+      imported,
+      originPath,
+    });
   }
   return out;
 }
@@ -235,6 +283,10 @@ export function importPages(
   const skipped: ImportResult["skipped"] = [];
   const notes: ImportResult["notes"] = [];
   const pending: PendingPage[] = [];
+  // Writes are deferred until after link resolution, so intra-batch collisions
+  // must be caught here — existsSync alone would let a later file clobber an
+  // earlier one's page silently.
+  const pendingTargets = new Set<string>();
 
   for (const file of files) {
     // realpath both sides: on macOS tmp dirs, /var is a symlink to /private/var
@@ -251,7 +303,7 @@ export function importPages(
     }
     const targetRel = `pages/${opts.kind}/${slug}.md`;
     const target = join(loreDir, targetRel);
-    if (existsSync(target)) {
+    if (existsSync(target) || pendingTargets.has(targetRel)) {
       skipped.push({
         from: fromRel,
         reason: `${targetRel} already exists — the slug is the identity`,
@@ -356,45 +408,89 @@ export function importPages(
     }
     head.push("imported: true", "---", "");
 
+    pendingTargets.add(targetRel);
     pending.push({ target, targetRel, fromRel, id: `${opts.kind}/${slug}`, head, body });
   }
 
-  // Link rewriting (SPEC §14): bare targets resolve against ALL pages plus this
-  // batch; exactly one slug match rewrites, anything else is left for lint.
-  const existing = collectPages(loreDir);
+  // Link rewriting (SPEC §14): targets resolve against ALL pages plus this batch.
+  // Path-style targets resolve exact-path-first against the linking file's own
+  // directory; a path that names a file skipped this run is never re-pointed by
+  // name — mis-anchoring is worse than a broken link.
+  const existing = loadExistingPages(loreDir);
+  const idSet = new Set<string>();
   const idBySlug = new Map<string, string | null>(); // null = ambiguous
+  const idByPath = new Map<string, string>(); // original source path → id
   const addId = (id: string): void => {
+    idSet.add(id);
     const slug = id.slice(id.indexOf("/") + 1);
     const prev = idBySlug.get(slug);
     if (prev === undefined) idBySlug.set(slug, id);
     else if (prev !== id) idBySlug.set(slug, null);
   };
-  for (const page of existing) addId(page.id);
-  for (const page of pending) addId(page.id);
+  for (const page of existing) {
+    addId(page.id);
+    if (page.originPath !== null) idByPath.set(page.originPath, page.id);
+  }
+  for (const page of pending) {
+    addId(page.id);
+    idByPath.set(page.fromRel, page.id);
+  }
+  const skippedRels = new Set(skipped.map((s) => s.from));
 
   let linksRewritten = 0;
   let linksLeft = 0;
-  const rewriteBody = (body: string): { body: string; changed: boolean } => {
+  const rewriteBody = (
+    body: string,
+    originPath: string | null,
+  ): { body: string; changed: boolean } => {
     let changed = false;
     const out = body.replace(WIKILINK, (full: string, inner: string) => {
-      const { target, alias } = splitWikiLink(inner);
-      if (target.includes("/")) return full; // already namespaced — never touched
-      const slug = slugify(target);
-      const id = slug === "" ? undefined : idBySlug.get(slug);
+      const { target, heading, alias } = splitWikiLink(inner);
+      if (target === "") {
+        if (heading === null) linksLeft++; // degenerate `[[|x]]` — lint will flag it
+        return full; // same-page anchors are not page links
+      }
+      const slash = target.indexOf("/");
+      let id: string | null | undefined;
+      if (slash !== -1 && kinds.includes(target.slice(0, slash))) {
+        // Id-form: the namespace takes precedence — never rewritten.
+        if (!idSet.has(target)) linksLeft++;
+        return full;
+      }
+      if (slash === -1) {
+        const slug = slugify(target);
+        id = slug === "" ? undefined : idBySlug.get(slug);
+      } else {
+        // Path-style: exact path against the linking file's directory first.
+        id = undefined;
+        if (originPath !== null) {
+          const cand = posix.normalize(posix.join(posix.dirname(originPath), target));
+          id = idByPath.get(cand) ?? idByPath.get(`${cand}.md`);
+          if (id === undefined && (skippedRels.has(cand) || skippedRels.has(`${cand}.md`))) {
+            linksLeft++;
+            return full;
+          }
+        }
+        if (id === undefined) {
+          const slug = slugify(posix.basename(target));
+          id = slug === "" ? undefined : idBySlug.get(slug);
+        }
+      }
       if (id === undefined || id === null) {
         linksLeft++;
         return full;
       }
       linksRewritten++;
       changed = true;
-      // The rendered text is information: keep the alias, or the original target.
-      return `[[${id}|${alias ?? target}]]`;
+      const suffix = heading === null ? "" : `#${heading}`;
+      // The rendered text is information: keep the alias, or the original target text.
+      return `[[${id}${suffix}|${alias ?? `${target}${suffix}`}]]`;
     });
     return { body: out, changed };
   };
 
   for (const page of pending) {
-    const rewritten = rewriteBody(page.body);
+    const rewritten = rewriteBody(page.body, page.fromRel);
     if (!opts.dryRun) {
       mkdirSync(dirname(page.target), { recursive: true });
       writeFileSync(page.target, [...page.head, rewritten.body].join("\n"));
@@ -406,19 +502,12 @@ export function importPages(
   // have created the targets of forward links left bare by an earlier run.
   let pagesRelinked = 0;
   for (const page of existing) {
-    const raw = readFileSync(page.file, "utf8");
-    let doc: ReturnType<typeof splitFrontmatter>;
-    try {
-      doc = splitFrontmatter(raw);
-    } catch {
-      continue; // malformed page — lint's problem, not import's
-    }
-    if (doc.frontmatter.imported !== "true") continue;
-    const rewritten = rewriteBody(doc.body);
+    if (!page.imported) continue;
+    const rewritten = rewriteBody(page.body, page.originPath);
     if (!rewritten.changed) continue;
     pagesRelinked++;
     if (!opts.dryRun) {
-      const headLines = raw.split("\n").slice(0, doc.bodyStartLine - 1);
+      const headLines = page.raw.split("\n").slice(0, page.bodyStartLine - 1);
       writeFileSync(page.file, `${headLines.join("\n")}\n${rewritten.body}`);
     }
   }

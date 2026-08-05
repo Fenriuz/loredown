@@ -1,8 +1,13 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { VERSION } from "./version.js";
 
 export const FENCE_BEGIN = "<!-- loredown:begin -->";
 export const FENCE_END = "<!-- loredown:end -->";
+
+// Adapter-written commands are pinned to the version that wrote them (SPEC §12):
+// agents execute these, so behavior must only change via a reviewable install diff.
+const CLI = `npx loredown@${VERSION}`;
 
 /** The entry-point contract (SPEC §12) — the only always-loaded loredown footprint. */
 export const ENTRY_BLOCK = `${FENCE_BEGIN}
@@ -15,8 +20,8 @@ constraints that the code cannot tell you.
   the repo (a decision and its why, a failed approach, an external constraint,
   a gotcha), add or update at most 3 pages under lore/pages/, append an entry
   to lore/log/<YYYY-MM>.md (\`## [<date>] ingest | <page-id> | <actor>/<agent>\`),
-  then run \`npx loredown index && npx loredown lint\` and include the changes
-  in your PR.
+  then run \`${CLI} index && ${CLI} lint\` and
+  include the changes in your PR.
 - **Never store:** how the code works, file layouts, or anything reproducible
   by reading the repo.
 ${FENCE_END}`;
@@ -35,12 +40,12 @@ failed approach, an external constraint, a gotcha, a domain term).
 For each fact that passes (at most 3):
 1. Prefer updating an existing page — check lore/index.md first; the slug is
    the identity (one page per topic).
-2. Otherwise scaffold with \`npx loredown new <kind> <slug> --agent claude-code
+2. Otherwise scaffold with \`${CLI} new <kind> <slug> --agent claude-code
    --task "<PR/ticket>"\` and fill the TODOs. Anchor claims to sources:
    repo-relative path + short sha of HEAD, or url + accessed date.
 3. Append a log entry to lore/log/<YYYY-MM>.md:
    \`## [<date>] ingest | <page-id> | <actor>/claude-code\`
-4. Run \`npx loredown index && npx loredown lint\` and fix any errors.
+4. Run \`${CLI} index && ${CLI} lint\` and fix any errors.
 
 Include the lore/ changes in the same PR as the code they came from.
 `;
@@ -65,7 +70,7 @@ alwaysApply: true
 This repo keeps its institutional memory in lore/. Follow the "Team knowledge
 base (lore/)" section in AGENTS.md: read lore/index.md at task start; at task
 end file only non-derivable learnings (max 3 pages) and run
-\`npx loredown index && npx loredown lint\`.
+\`${CLI} index && ${CLI} lint\`.
 `;
 
 export const ADAPTER_TOOLS = ["claude-code", "codex", "cursor"] as const;

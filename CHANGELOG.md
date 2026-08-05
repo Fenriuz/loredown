@@ -4,6 +4,49 @@ All notable changes to loredown are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and the project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.4.0] — 2026-08-05
+
+Driven by the third field report — the same team's 27-page migration re-run on
+v0.3.0 (169 → 17 broken links; 58 harvested code anchors, drift-clean; 2 of the
+remaining errors were real dangling links the wiki's own author did not know it
+had). The three gaps it surfaced are closed.
+
+### Added
+
+- **Heading anchors in wiki-links** — the grammar is now
+  `[[target(#heading)?(|display)?]]`: `[[#Setup]]` is a same-page anchor, not a
+  page link (lint no longer false-flags it); `[[page#Setup|display]]` validates
+  and rewrites only the page part, the heading rides along untouched. Heading
+  *existence* is deliberately unchecked — real headings carry formatting that
+  text-matching would false-flag, and a false positive trains people to ignore
+  lint.
+- **Relative-path wiki-links resolve on import** — how folder-organised vaults
+  link across directories. Path-style targets (leading segment is not a
+  declared kind) resolve exact-path-first against the linking file's own
+  directory — batch pages know their source path, previously imported pages
+  carry theirs as their first source anchor — then fall back to basename→slug.
+  A path that names a file *skipped this run* is left alone: rewriting it by
+  name could point at the wrong page, and mis-anchoring is worse than a broken
+  link. Id-form targets (`decision/beta`) keep namespace precedence and are
+  never rewritten.
+- **Counter invariant** — the import summary's "left for review" now equals
+  the `LINK_BROKEN` findings lint will raise over the pages import scanned
+  (including id-form targets that do not exist). The summary predicts the lint.
+- **Pinned adapter commands** — `install` writes `npx loredown@<version>` (the
+  version that wrote the block) instead of unpinned `npx loredown`. These
+  commands are executed by agents — the least observable place for behavior to
+  change — so a new release must never alter a team's toolchain until someone
+  re-runs `install` and reviews the fence diff. `npm i -D loredown` remains the
+  lockfile-level alternative.
+
+### Fixed
+
+- Intra-batch slug collisions: since import began deferring writes for link
+  resolution (0.3.0), two files in one run yielding the same slug silently
+  clobbered each other's page. The collision check now covers pages pending in
+  the same run — the later file is skipped and reported like any other
+  collision.
+
 ## [0.3.0] — 2026-08-05
 
 Driven by the second field report from the same umbrella-project team — the

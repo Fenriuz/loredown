@@ -55,6 +55,8 @@ Keep it honest in CI:
 
 Every command supports `--json`, `--dry-run`, and `--verbose`. The CLI has **zero runtime dependencies** and performs **no network I/O**.
 
+The adapters installed by `loredown install` pin their commands to the installing version (`npx loredown@x.y.z`), so agent-executed behavior only changes when someone re-runs `install` and reviews the diff. Teams that prefer lockfile pinning can `npm i -D loredown` instead.
+
 ### Migrating an existing KB
 
 `loredown import` scaffolds pages from your current wiki (Obsidian vault, docs folder, any

@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { ENTRY_BLOCK, installAdapter, upsertFencedBlock } from "../src/adapters.js";
 import { initLore } from "../src/init.js";
 import { run } from "../src/main.js";
+import { VERSION } from "../src/version.js";
 
 function makeRepo(): string {
   const dir = mkdtempSync(join(tmpdir(), "loredown-adapter-"));
@@ -31,6 +32,24 @@ describe("upsertFencedBlock", () => {
 });
 
 describe("installAdapter", () => {
+  it("pins every written command to the installing version (SPEC §12)", () => {
+    const dir = makeRepo();
+    installAdapter(dir, "claude-code", false);
+    installAdapter(dir, "cursor", false);
+    const pinned = `npx loredown@${VERSION}`;
+    expect(readFileSync(join(dir, "AGENTS.md"), "utf8")).toContain(`${pinned} index`);
+    expect(readFileSync(join(dir, ".claude/commands/lore-ingest.md"), "utf8")).toContain(
+      `${pinned} new`,
+    );
+    expect(readFileSync(join(dir, ".cursor/rules/loredown.mdc"), "utf8")).toContain(
+      `${pinned} lint`,
+    );
+    // No unpinned invocation survives anywhere the adapters write.
+    for (const file of ["AGENTS.md", ".claude/commands/lore-ingest.md"]) {
+      expect(readFileSync(join(dir, file), "utf8")).not.toMatch(/npx loredown[^@]/);
+    }
+  });
+
   it("rejects unknown tools", () => {
     const result = installAdapter(makeRepo(), "vim", false);
     expect(result.error).toContain('unknown tool "vim"');

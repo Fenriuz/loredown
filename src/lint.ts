@@ -131,8 +131,11 @@ export function lintLore(load: LoadResult): Finding[] {
 
     for (const match of page.body.matchAll(WIKILINK)) {
       const inner = match[1] as string;
-      // `[[target|display]]`: only the target must resolve; display text is free (SPEC §3).
-      if (!ids.has(splitWikiLink(inner).target)) {
+      // Grammar (SPEC §3): only the page part must resolve — heading and display are free,
+      // and an empty target with a heading is a same-page anchor, not a page link.
+      const { target, heading } = splitWikiLink(inner);
+      if (target === "" && heading !== null) continue;
+      if (!ids.has(target)) {
         add("error", "LINK_BROKEN", file, `wiki-link [[${inner}]] has no matching page`);
       }
     }

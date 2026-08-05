@@ -271,6 +271,69 @@ describe("loredown import", () => {
     );
   });
 
+  it("resolves relative-path targets through the linking file's directory", () => {
+    const dir = makeRepo({
+      "docs/domain/beta.md": "# Beta\n\nBody.\n",
+      "docs/ops/alpha.md": "# Alpha\n\nSee [[../domain/beta]] and [[beta]].\n",
+    });
+    const result = run(["import", "docs", "--kind", "decision"], dir);
+    expect(result.code, result.stderr).toBe(0);
+    expect(result.stdout).toContain("2 wiki-links rewritten, 0 left for review");
+    const alpha = readFileSync(join(dir, "lore/pages/decision/alpha.md"), "utf8");
+    expect(alpha).toContain("See [[decision/beta|../domain/beta]] and [[decision/beta|beta]].");
+    run(["index", "--lore", join(dir, "lore")], dir);
+    expect(lintLore(loadLore(join(dir, "lore"))).filter((f) => f.code === "LINK_BROKEN")).toEqual(
+      [],
+    );
+  });
+
+  it("passes heading anchors through: same-page ignored, cross-page rewritten intact", () => {
+    const dir = makeRepo({
+      "docs/pipeline.md":
+        "# Pipeline\n\nSee [[#Savers]] below and [[intro#Setup|the setup]].\n\n## Savers\n\nText.\n",
+      "docs/intro.md": "# Intro\n\n## Setup\n\nText.\n",
+    });
+    const result = run(["import", "docs", "--kind", "map"], dir);
+    expect(result.code, result.stderr).toBe(0);
+    expect(result.stdout).toContain("1 wiki-link rewritten, 0 left for review");
+    const pipeline = readFileSync(join(dir, "lore/pages/map/pipeline.md"), "utf8");
+    expect(pipeline).toContain("See [[#Savers]] below"); // same-page anchor — not a page link
+    expect(pipeline).toContain("[[map/intro#Setup|the setup]]"); // heading and display carried
+    run(["index", "--lore", join(dir, "lore")], dir);
+    expect(lintLore(loadLore(join(dir, "lore"))).filter((f) => f.code === "LINK_BROKEN")).toEqual(
+      [],
+    );
+  });
+
+  it("never re-points a relative link whose file was skipped this run", () => {
+    const dir = makeRepo({
+      "docs/a/overview.md": "# Overview A\n\nBody.\n",
+      "docs/b/overview.md": "# Overview B\n\nBody.\n",
+      "docs/c/notes.md": "# Notes\n\nSee [[../b/overview]].\n",
+    });
+    const result = run(["import", "docs", "--kind", "map"], dir);
+    // a/overview wins the slug, b/overview is skipped — resolving the link by
+    // basename would point at the WRONG page; it must be left for review instead.
+    expect(result.stdout).toContain("already exists");
+    expect(result.stdout).toContain("0 wiki-links rewritten, 1 left for review");
+    expect(readFileSync(join(dir, "lore/pages/map/notes.md"), "utf8")).toContain(
+      "See [[../b/overview]].",
+    );
+  });
+
+  it("left-for-review equals what lint will report (counter invariant)", () => {
+    const dir = makeRepo({
+      "docs/one.md": "# One\n\n[[two]] and [[missing]] and [[decision/ghost]] and [[#Anchor]].\n",
+      "docs/two.md": "# Two\n\nBody.\n",
+    });
+    const result = run(["import", "docs", "--kind", "decision"], dir);
+    const left = Number(result.stdout.match(/(\d+) left for review/)?.[1]);
+    run(["index", "--lore", join(dir, "lore")], dir);
+    const broken = lintLore(loadLore(join(dir, "lore"))).filter((f) => f.code === "LINK_BROKEN");
+    expect(left).toBe(broken.length); // the summary predicts the lint
+    expect(broken.length).toBe(2); // [[missing]] + [[decision/ghost]]; [[#Anchor]] is free
+  });
+
   it("lint validates only the target of aliased wiki-links", () => {
     const dir = makeWikiRepo();
     mkdirSync(join(dir, "lore/pages/decision"), { recursive: true });
