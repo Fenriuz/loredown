@@ -11,7 +11,7 @@ provenance:
   task: "budget review after field report"
 sources:
   - path: SPEC.md
-    sha: "0396314"
+    sha: "2520191"
     note: §8 budgets + long-form pointer pattern
   - url: https://arxiv.org/abs/2307.03172
     accessed: 2026-08-05

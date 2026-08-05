@@ -11,7 +11,7 @@ provenance:
   task: "v0.2.0 field report"
 sources:
   - path: SPEC.md
-    sha: "0396314"
+    sha: "2520191"
     note: §9 sibling-repos design
 ---
 
@@ -28,7 +28,9 @@ never an error or warning finding.
 "Not verifiable here" and "the evidence is gone" are different facts; conflating
 them makes the flagship feature fail pipelines precisely in the environments
 where it runs on a schedule. The first field report (umbrella repo, six sibling
-repos) showed v0.1 erroring on exactly the highest-value pages.
+repos) showed v0.1 erroring on exactly the highest-value pages. The second
+field report verified the full design in the field: 6/6 cases including
+absent-checkout → reported skip, exit 0.
 
 ## Rejected alternatives
 Warn-level finding (spurious CI failures everywhere the checkout is absent);
