@@ -94,11 +94,16 @@ logs before touching the handler.
 
 - Budget: **≤ 40 non-blank lines** (configurable). Over budget → lint warning; twice the budget → error. A fact that needs more space is usually several facts, or it's derivable detail that belongs in the code.
 - Structure follows the kind's template (§4). Templates are conventions enforced as warnings, not straitjackets.
-- Wiki-links reference other pages by id — `[[decision/beta]]` — or with display text —
-  `[[decision/beta|the beta rollout]]`: target first, then `|`, then text. Target-first is the
-  dominant wiki-link convention (MediaWiki, Obsidian, Logseq), so lore renders in any
-  wiki-capable viewer without being tied to one. Lint validates the target part and errors on
-  broken targets; display text is free.
+- Wiki-links follow the grammar `[[target(#heading)?(|display text)?]]` — target first, then an
+  optional heading anchor, then optional display text. Target-first is the dominant wiki-link
+  convention (MediaWiki, Obsidian, Logseq), so lore renders in any wiki-capable viewer without
+  being tied to one. The target is a page id (`[[decision/beta]]`, `[[decision/beta#Why|see
+  why]]`). An empty target with a heading (`[[#Setup]]`) is a same-page anchor, not a page
+  link — lint does not validate it, and heading existence is deliberately unchecked: real
+  headings carry formatting that text-matching would false-flag, and a false positive trains
+  people to ignore lint. Lint validates only the page part of the target and errors on broken
+  targets; heading and display text are free. Path-style targets (`[[../domain/beta]]`) are
+  not valid lore links — `import` resolves them to ids (§14); lint flags any that remain.
 
 ## 4. Kinds
 
@@ -216,14 +221,16 @@ constraints that the code cannot tell you.
   the repo (a decision and its why, a failed approach, an external constraint,
   a gotcha), add or update at most 3 pages under lore/pages/, append an entry
   to lore/log/<YYYY-MM>.md (`## [<date>] ingest | <page-id> | <actor>/<agent>`),
-  then run `npx loredown index && npx loredown lint` and include the changes
-  in your PR.
+  then run `npx loredown@<version> index && npx loredown@<version> lint` and
+  include the changes in your PR.
 - **Never store:** how the code works, file layouts, or anything reproducible
   by reading the repo.
 <!-- loredown:end -->
 ```
 
-Adapters (`loredown install <tool>`) place that block idempotently (fenced markers, safe re-runs) plus tool-specific sugar:
+Adapters (`loredown install <tool>`) place that block idempotently (fenced markers, safe re-runs) plus tool-specific sugar. Every `npx loredown` the adapters write is **pinned to the CLI version that wrote it** (`npx loredown@0.4.0 …`): these commands are executed by agents — the least observable place for behavior to change — so a new loredown release must never alter a team's toolchain until someone re-runs `install` and reviews the resulting fence diff in a PR. Teams that want lockfile-level pinning instead add loredown as a `devDependency`.
+
+Tool table:
 
 | Tool | Mechanism |
 |---|---|
@@ -281,16 +288,26 @@ Error output goes to stderr; findings go to stdout (human format or `--json`).
   the path verifies in the target repo — **an anchor must never be born `SRC_GONE`**.
   Unverifiable entries (absent checkout, unknown path) are kept in the import anchor's
   `note:`. The anchor to the original file at HEAD is always kept as the provenance trail.
-- **Link rewriting** — bare wiki-link targets (no `/`) are slugified and resolved against
-  all lore pages plus the current batch. Exactly one match → rewritten to the full id with
-  the original rendered text preserved as display (`[[Beta Service]]` →
-  `[[glossary/beta-service|Beta Service]]`; an existing alias is kept). Ambiguous targets
-  (several kinds share the slug) and unresolvable targets are left as-is for lint to flag —
-  guessing would be worse than reporting. Targets already containing `/` are never touched,
-  so a KB already in `kind/slug` form imports unchanged. After each run the rewrite pass
-  covers **every page still marked `imported: true`**, not just the batch: a KB imported in
-  several `--kind` runs converges, because later runs resolve the forward links earlier
-  runs could not. Rewritten and left-for-review counts are reported.
+- **Link rewriting** — wiki-link targets are resolved against all lore pages plus the
+  current batch and rewritten to the id namespace; heading anchors ride along untouched and
+  same-page anchors (`[[#H]]`) are not links. A target whose leading segment is a declared
+  kind is **id-form** and is never rewritten — the namespace takes precedence; if the id
+  does not exist it is counted for review. A bare target (no `/`) is slugified and resolved
+  by slug. A **path-style** target (contains `/`, leading segment not a kind — the way
+  folder-organised vaults link) resolves in order: (1) *exact path* — against the linking
+  file's own directory (batch pages know their source path; previously imported pages carry
+  it as their first source anchor), tried with and without `.md`, against the original-path
+  → id index; (2) a path that resolves to a file **skipped this run** is left alone and
+  counted — rewriting it by name could point at the wrong page, and mis-anchoring is worse
+  than a broken link; (3) otherwise the basename falls back to slug resolution. Exactly one
+  match → rewritten with the original rendered text preserved as display
+  (`[[Beta Service]]` → `[[glossary/beta-service|Beta Service]]`; an existing alias is
+  kept). Ambiguous and unresolvable targets are left as-is for lint to flag — guessing
+  would be worse than reporting. After each run the rewrite pass covers **every page still
+  marked `imported: true`**, not just the batch: a KB imported in several `--kind` runs
+  converges, because later runs resolve the forward links earlier runs could not.
+  **Counter invariant**: the reported left-for-review count equals the `LINK_BROKEN`
+  findings lint will raise over the pages import scanned — the summary predicts the lint.
 
 **Migration order**: import → re-anchor pages to code (`repo:` sources) → only then delete
 the old KB directory. Imported pages are anchored to their original files; deleting those
