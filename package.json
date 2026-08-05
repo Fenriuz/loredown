@@ -28,7 +28,7 @@
     "node": ">=20"
   },
   "bin": {
-    "loredown": "./dist/cli.js"
+    "loredown": "dist/cli.js"
   },
   "files": [
     "dist"

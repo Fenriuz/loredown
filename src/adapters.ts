@@ -134,11 +134,7 @@ export function installAdapter(root: string, tool: string, dryRun: boolean): Ins
     let next: string;
     if (op.mode === "own") {
       next = op.content;
-    } else if (
-      existing !== null &&
-      op.skipIfPresent !== undefined &&
-      op.skipIfPresent.test(stripFence(existing))
-    ) {
+    } else if (existing !== null && op.skipIfPresent?.test(stripFence(existing))) {
       next = existing; // The file already provides what our fence would add.
     } else {
       next = upsertFencedBlock(existing, op.content);

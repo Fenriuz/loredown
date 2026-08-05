@@ -107,7 +107,7 @@ export function allowedKinds(config: Config): string[] {
 /** Section heading for a kind: builtins from the table, custom kinds get "s" appended. */
 export function sectionHeading(kind: string): string {
   if (isBuiltinKind(kind)) return KIND_SECTIONS[kind];
-  return kind.charAt(0).toUpperCase() + kind.slice(1) + "s";
+  return `${kind.charAt(0).toUpperCase()}${kind.slice(1)}s`;
 }
 
 /** Body templates used by `loredown new` (SPEC §4). */

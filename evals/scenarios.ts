@@ -124,6 +124,7 @@ const ingest: Scenario = {
         "",
         "export async function createCharge(charge: Charge): Promise<string> {",
         "  // Sends the charge to the payment provider.",
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: fixture source code, not an interpolation
         "  return `ch_${charge.amountCents}`;",
         "}",
         "",
