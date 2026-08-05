@@ -4,3 +4,5 @@ coverage/
 *.log
 .DS_Store
 .claude/settings.local.json
+# Viewer state — any tool may open lore/ (Obsidian et al.); its state never rides the repo
+lore/.obsidian/
