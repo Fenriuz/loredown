@@ -94,7 +94,11 @@ logs before touching the handler.
 
 - Budget: **≤ 40 non-blank lines** (configurable). Over budget → lint warning; twice the budget → error. A fact that needs more space is usually several facts, or it's derivable detail that belongs in the code.
 - Structure follows the kind's template (§4). Templates are conventions enforced as warnings, not straitjackets.
-- Wiki-links `[[id]]` reference other pages; lint errors on broken targets.
+- Wiki-links reference other pages by id — `[[decision/beta]]` — or with display text —
+  `[[decision/beta|the beta rollout]]`: target first, then `|`, then text. Target-first is the
+  dominant wiki-link convention (MediaWiki, Obsidian, Logseq), so lore renders in any
+  wiki-capable viewer without being tied to one. Lint validates the target part and errors on
+  broken targets; display text is free.
 
 ## 4. Kinds
 
@@ -251,9 +255,46 @@ v0.1 ships a single root `lore/`. The scoping extension, so the schema doesn't p
 | `drift` | §9 checks against git HEAD. | 0 clean / 1 any finding / 2 usage |
 | `trace <id>` | Print a page's provenance, sources with current drift status, inbound links, and log entries mentioning it. | 0 / 2 |
 | `install <tool>` | Idempotently install an agent adapter (§12): fenced block in AGENTS.md, tool-specific files. Fences are upserted; content outside them is never touched. | 0 / 2 |
-| `import <path…> --kind <kind>` | Scaffold pages from existing markdown files (adoption path): H1 → title, body preserved, `provenance` from the file's git history, source anchored to the *original file* at HEAD (truthful and lint-valid by construction — no TODOs), `imported: true` marker. Judgment (derivability, kind, splitting) stays with the human/agent. Slug collisions are skipped and reported. | 0 / 2 |
+| `import <path…> --kind <kind>` | Scaffold pages from existing markdown files (adoption path) — a deterministic, judgment-free transform; full contract below. Slug collisions are skipped and reported. | 0 / 2 |
 
 Error output goes to stderr; findings go to stdout (human format or `--json`).
+
+### Import contract
+
+`import` is mechanical: it applies **no judgment and loses no information**. Judgment
+(derivability test, kind correction, splitting) stays with the human/agent — the
+`imported: true` marker (§3) carries that debt until curation removes it. Per file:
+
+- **Title** — pre-existing frontmatter `title`, else the first H1, else the filename
+  (clipped to the title budget). A used H1 is removed from the body.
+- **Pre-existing frontmatter** is parsed (strict subset, §3) and stripped — never left
+  behind as body text. `created`/`updated` are adopted when they are `YYYY-MM-DD` dates
+  (the original KB's dates survive repo moves that `git log --follow` does not); otherwise
+  dates come from git history. Unrecognized keys are preserved in the import anchor's
+  `note:` (byte-ordered) so no metadata is silently dropped. Frontmatter that does not
+  parse under the strict subset is left in the body untouched and reported per file —
+  visible, never guessed at.
+- **Source harvesting** — entries of a pre-existing `sources:` list of paths resolve to
+  real anchors: longest-prefix match against `config.repos` names a sibling checkout
+  (anchor: `repo` + remaining path + that checkout's HEAD sha); otherwise a path tracked
+  at HEAD in this repo becomes a plain path anchor. An entry becomes an anchor only when
+  the path verifies in the target repo — **an anchor must never be born `SRC_GONE`**.
+  Unverifiable entries (absent checkout, unknown path) are kept in the import anchor's
+  `note:`. The anchor to the original file at HEAD is always kept as the provenance trail.
+- **Link rewriting** — bare wiki-link targets (no `/`) are slugified and resolved against
+  all lore pages plus the current batch. Exactly one match → rewritten to the full id with
+  the original rendered text preserved as display (`[[Beta Service]]` →
+  `[[glossary/beta-service|Beta Service]]`; an existing alias is kept). Ambiguous targets
+  (several kinds share the slug) and unresolvable targets are left as-is for lint to flag —
+  guessing would be worse than reporting. Targets already containing `/` are never touched,
+  so a KB already in `kind/slug` form imports unchanged. After each run the rewrite pass
+  covers **every page still marked `imported: true`**, not just the batch: a KB imported in
+  several `--kind` runs converges, because later runs resolve the forward links earlier
+  runs could not. Rewritten and left-for-review counts are reported.
+
+**Migration order**: import → re-anchor pages to code (`repo:` sources) → only then delete
+the old KB directory. Imported pages are anchored to their original files; deleting those
+files first flips every uncurated page to `SRC_GONE` at once.
 
 ## 15. Config reference (`lore/config.yaml`)
 
