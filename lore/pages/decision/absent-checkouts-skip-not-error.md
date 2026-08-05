@@ -11,7 +11,7 @@ provenance:
   task: "v0.2.0 field report"
 sources:
   - path: SPEC.md
-    sha: "2520191"
+    sha: "33f69b4"
     note: §9 sibling-repos design
 ---
 

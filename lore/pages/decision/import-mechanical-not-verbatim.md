@@ -11,7 +11,7 @@ provenance:
   task: "v0.3.0 field report"
 sources:
   - path: SPEC.md
-    sha: "2520191"
+    sha: "33f69b4"
     note: §14 import contract
 ---
 
@@ -26,7 +26,10 @@ It may apply deterministic, reversible, reported transforms (link-namespace
 rewriting, frontmatter harvesting) but never guesses: ambiguous links stay put,
 unadopted metadata stays visible, and a harvested anchor must verify in its
 target repo — never born SRC_GONE, the same philosophy as
-[[decision/absent-checkouts-skip-not-error]].
+[[decision/absent-checkouts-skip-not-error]]. A path-style link naming a file
+skipped this run is left broken rather than re-pointed by name — mis-anchoring
+is worse than a broken link. And the summary's left-for-review count equals
+what lint will flag: the summary predicts the lint.
 
 ## Why
 One-PR migration is the reason import exists; verbatim copying was the means,
