@@ -1,5 +1,5 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { basename, join } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { byteCompare } from "./findings.js";
 import { commitsTouchingSince, pathExistsAtHead, repoRoot, shaResolvable } from "./git.js";
 import type { LoadResult } from "./load.js";
@@ -23,12 +23,29 @@ export function tracePage(load: LoadResult, id: string, cwd: string): string | n
       lines.push(`  - url ${source.url} (accessed ${source.accessed})`);
       continue;
     }
-    let drift = "drift status unavailable (not a git repository)";
-    if (root !== null) {
-      if (!shaResolvable(root, source.sha)) drift = `sha ${source.sha} not found in repository`;
-      else if (!pathExistsAtHead(root, source.path)) drift = "path no longer exists at HEAD";
+    let gitCwd = root;
+    let unverifiable: string | null = null;
+    if (source.repo !== undefined) {
+      const rel = load.config.repos[source.repo];
+      if (rel === undefined) {
+        unverifiable = `repo "${source.repo}" is not declared in config.repos`;
+        gitCwd = null;
+      } else {
+        const checkout = resolve(dirname(load.loreDir), rel);
+        if (!existsSync(checkout)) {
+          unverifiable = `repo "${source.repo}" checkout not present — unverifiable here`;
+          gitCwd = null;
+        } else {
+          gitCwd = checkout;
+        }
+      }
+    }
+    let drift = unverifiable ?? "drift status unavailable (not a git repository)";
+    if (gitCwd !== null) {
+      if (!shaResolvable(gitCwd, source.sha)) drift = `sha ${source.sha} not found in repository`;
+      else if (!pathExistsAtHead(gitCwd, source.path)) drift = "path no longer exists at HEAD";
       else {
-        const commits = commitsTouchingSince(root, source.sha, source.path);
+        const commits = commitsTouchingSince(gitCwd, source.sha, source.path);
         drift =
           commits === null
             ? "drift status unavailable"
@@ -38,7 +55,8 @@ export function tracePage(load: LoadResult, id: string, cwd: string): string | n
       }
     }
     const note = source.note === undefined ? "" : ` (${source.note})`;
-    lines.push(`  - path ${source.path} @ ${source.sha}${note} — ${drift}`);
+    const label = source.repo === undefined ? source.path : `${source.repo}:${source.path}`;
+    lines.push(`  - path ${label} @ ${source.sha}${note} — ${drift}`);
   }
 
   const inbound = load.pages

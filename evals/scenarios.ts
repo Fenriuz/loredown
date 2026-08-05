@@ -251,7 +251,7 @@ const driftReverify: Scenario = {
   assert(dir, ctx) {
     const checks: Check[] = [];
     const load = loadLore(join(dir, "lore"));
-    const drift = driftLore(load, dir);
+    const drift = driftLore(load, dir).findings;
     checks.push(
       check(
         "drift clean after re-verification",

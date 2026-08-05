@@ -140,20 +140,43 @@ export function lintLore(load: LoadResult): Finding[] {
 
     const bodyLines = nonBlankLines(page.body);
     const budget = config.budgets.pageBodyLines;
+    const seams = [...page.body.matchAll(/^## (.+)$/gm)].map((m) => m[1] as string);
+    const seamHint = seams.length >= 2 ? ` — split seams: ${seams.slice(0, 6).join(" · ")}` : "";
     if (bodyLines > budget * 2) {
+      // Imported pages get the hard limit as a warning so a migration can land in one PR (SPEC §8).
       add(
-        "error",
+        page.imported === true ? "warn" : "error",
         "BODY_OVER_HARD",
         file,
-        `body has ${bodyLines} non-blank lines (hard limit ${budget * 2}) — split the fact or cut derivable detail`,
+        `body has ${bodyLines} non-blank lines (hard limit ${budget * 2}) — split the fact or cut derivable detail${seamHint}`,
       );
     } else if (bodyLines > budget) {
       add(
         "warn",
         "BODY_OVER_BUDGET",
         file,
-        `body has ${bodyLines} non-blank lines (budget ${budget})`,
+        `body has ${bodyLines} non-blank lines (budget ${budget})${seamHint}`,
       );
+    }
+
+    if (page.imported === true) {
+      add(
+        "warn",
+        "IMPORTED",
+        file,
+        "pending curation — apply the derivability test, split to budget, re-anchor sources to code, then remove `imported: true`",
+      );
+    }
+
+    for (const source of page.sources) {
+      if ("repo" in source && source.repo !== undefined && !(source.repo in config.repos)) {
+        add(
+          "error",
+          "SRC_REPO",
+          file,
+          `source "${source.path}": repo "${source.repo}" is not declared in config.repos`,
+        );
+      }
     }
 
     if (page.supersedes !== undefined) {

@@ -27,6 +27,8 @@ export interface PathSource {
   path: string;
   sha: string;
   note?: string;
+  /** Name of a sibling checkout declared in config.repos (SPEC §9). */
+  repo?: string;
 }
 
 export interface UrlSource {
@@ -53,6 +55,8 @@ export interface Page {
   provenance: Provenance;
   sources: Source[];
   supersedes?: string;
+  /** Imported from a pre-existing KB, pending curation (SPEC §3). */
+  imported?: boolean;
   /** Markdown body after the closing frontmatter fence. */
   body: string;
   /** File path relative to the lore dir, e.g. "pages/gotcha/foo.md". */
@@ -64,19 +68,24 @@ export interface Config {
   budgets: {
     pageBodyLines: number;
     pagesPerTask: number;
+    /** Drift-only URL staleness horizon in days; 0 disables (SPEC §9). */
+    urlAccessedMaxAgeDays: number;
   };
   scan: {
     instructions: "off" | "warn" | "error";
     secrets: "warn" | "error";
   };
   kinds: string[];
+  /** Sibling checkouts for cross-repo anchors: name → relative path (SPEC §9). */
+  repos: Record<string, string>;
 }
 
 export const DEFAULT_CONFIG: Config = {
   schemaVersion: 1,
-  budgets: { pageBodyLines: 40, pagesPerTask: 3 },
+  budgets: { pageBodyLines: 40, pagesPerTask: 3, urlAccessedMaxAgeDays: 0 },
   scan: { instructions: "warn", secrets: "error" },
   kinds: [],
+  repos: {},
 };
 
 /** The newest schema this build of the CLI understands (SPEC §17). */

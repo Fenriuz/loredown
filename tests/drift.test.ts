@@ -59,7 +59,7 @@ describe("driftLore", () => {
     const dir = makeRepo();
     initLore(dir, false, "2026-07");
     writeAnchoredPage(dir, sh(dir, ["rev-parse", "--short", "HEAD"]));
-    expect(driftLore(loadLore(join(dir, "lore")), dir)).toEqual([]);
+    expect(driftLore(loadLore(join(dir, "lore")), dir).findings).toEqual([]);
   });
 
   it("warns with the commit count when the anchored file changed", () => {
@@ -68,7 +68,7 @@ describe("driftLore", () => {
     writeAnchoredPage(dir, sh(dir, ["rev-parse", "--short", "HEAD"]));
     writeFileSync(join(dir, "src/a.ts"), "export const a = 2;\n");
     sh(dir, ["commit", "-am", "change a"]);
-    const findings = driftLore(loadLore(join(dir, "lore")), dir);
+    const findings = driftLore(loadLore(join(dir, "lore")), dir).findings;
     expect(findings).toHaveLength(1);
     expect(findings[0]?.code).toBe("SRC_STALE");
     expect(findings[0]?.level).toBe("warn");
@@ -81,7 +81,7 @@ describe("driftLore", () => {
     writeAnchoredPage(dir, sh(dir, ["rev-parse", "--short", "HEAD"]));
     sh(dir, ["rm", "src/a.ts"]);
     sh(dir, ["commit", "-m", "remove a"]);
-    const findings = driftLore(loadLore(join(dir, "lore")), dir);
+    const findings = driftLore(loadLore(join(dir, "lore")), dir).findings;
     expect(findings).toHaveLength(1);
     expect(findings[0]?.code).toBe("SRC_GONE");
     expect(findings[0]?.level).toBe("error");
@@ -91,7 +91,7 @@ describe("driftLore", () => {
     const dir = makeRepo();
     initLore(dir, false, "2026-07");
     writeAnchoredPage(dir, "deadbee");
-    const findings = driftLore(loadLore(join(dir, "lore")), dir);
+    const findings = driftLore(loadLore(join(dir, "lore")), dir).findings;
     expect(findings).toHaveLength(1);
     expect(findings[0]?.code).toBe("SRC_SHA");
   });
@@ -99,7 +99,7 @@ describe("driftLore", () => {
   it("errors outside a git repository", () => {
     const dir = mkdtempSync(join(tmpdir(), "loredown-norepo-"));
     initLore(dir, false, "2026-07");
-    const findings = driftLore(loadLore(join(dir, "lore")), dir);
+    const findings = driftLore(loadLore(join(dir, "lore")), dir).findings;
     expect(findings).toHaveLength(1);
     expect(findings[0]?.code).toBe("GIT_REPO");
   });
@@ -114,6 +114,6 @@ describe("driftLore", () => {
     const page = join(dir, "lore/pages/gotcha/anchored.md");
     const text = readFileSync(page, "utf8");
     writeFileSync(page, text.replace("status: active", "status: superseded"));
-    expect(driftLore(loadLore(join(dir, "lore")), dir)).toEqual([]);
+    expect(driftLore(loadLore(join(dir, "lore")), dir).findings).toEqual([]);
   });
 });

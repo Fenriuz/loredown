@@ -88,7 +88,8 @@ function splitKey(line: Line): { key: string; rest: string } | null {
   const colon = text.indexOf(":");
   if (colon <= 0) return null;
   const key = text.slice(0, colon);
-  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) return null;
+  // Hyphens and dots are legal in keys — repo names like `rfid-svc` appear as config.repos keys.
+  if (!/^[A-Za-z_][A-Za-z0-9_.-]*$/.test(key)) return null;
   const after = text.slice(colon + 1);
   if (after !== "" && !after.startsWith(" ")) return null;
   return { key, rest: after.trim() };

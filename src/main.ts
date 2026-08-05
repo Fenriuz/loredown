@@ -3,6 +3,7 @@ import { basename, dirname, join } from "node:path";
 import { installAdapter } from "./adapters.js";
 import { driftLore } from "./drift.js";
 import { type Finding, formatHuman, formatJson, summarize } from "./findings.js";
+import { importPages } from "./import.js";
 import { generateIndex } from "./index-gen.js";
 import { initLore, SEED_GUIDE } from "./init.js";
 import { lintLore } from "./lint.js";
@@ -17,7 +18,16 @@ export interface RunResult {
   stderr: string;
 }
 
-export const COMMANDS = ["init", "new", "lint", "index", "drift", "trace", "install"] as const;
+export const COMMANDS = [
+  "init",
+  "new",
+  "lint",
+  "index",
+  "drift",
+  "trace",
+  "install",
+  "import",
+] as const;
 
 const USAGE = `loredown ${VERSION} — your repo's institutional memory, maintained by coding agents.
 
@@ -31,6 +41,7 @@ Commands:
   drift                Flag pages whose source anchors changed since verification
   trace <id>           Show a page's provenance, sources, inbound links, log mentions
   install <tool>       Install an agent adapter: claude-code | codex | cursor
+  import <path…>       Scaffold pages from existing markdown (requires --kind)
 
 Options:
   --lore <path>        Explicit lore directory (default: walk up from cwd)
@@ -39,6 +50,7 @@ Options:
   --verbose            More detail
   --agent <name>       (new) provenance agent, default "human"
   --task <text>        (new) provenance task, default "TODO"
+  --kind <kind>        (import) kind assigned to every imported page
   -h, --help           Show this help
   -v, --version        Show version
 
@@ -54,6 +66,7 @@ interface Flags {
   lore?: string;
   agent: string;
   task: string;
+  kind?: string;
 }
 
 function parseArgs(argv: readonly string[]): { flags: Flags; positional: string[] } | string {
@@ -88,11 +101,13 @@ function parseArgs(argv: readonly string[]): { flags: Flags; positional: string[
         break;
       case "--lore":
       case "--agent":
-      case "--task": {
+      case "--task":
+      case "--kind": {
         const value = args[++i];
         if (value === undefined) return `${arg} requires a value`;
         if (arg === "--lore") flags.lore = value;
         else if (arg === "--agent") flags.agent = value;
+        else if (arg === "--kind") flags.kind = value;
         else flags.task = value;
         break;
       }
@@ -259,8 +274,59 @@ export function run(argv: readonly string[], cwd = process.cwd()): RunResult {
     case "drift": {
       const located = requireLore(cwd, flags);
       if ("code" in located) return located;
-      // Drift findings are the command's entire point: any finding fails.
-      return findingsResult(driftLore(located.load, cwd), flags, true);
+      const { findings, skipped } = driftLore(located.load, cwd);
+      if (flags.json) {
+        return {
+          // Drift findings are the command's entire point: any finding fails.
+          code: findings.length > 0 ? 1 : 0,
+          stdout: JSON.stringify(
+            { version: 1, findings, summary: summarize(findings), skipped },
+            null,
+            2,
+          ),
+          stderr: "",
+        };
+      }
+      const result = findingsResult(findings, flags, true);
+      if (skipped.length > 0) {
+        const lines = skipped.map(
+          (s) =>
+            `skipped ${s.count} source${s.count === 1 ? "" : "s"}: repo "${s.repo}" checkout not present at ${s.checkout}`,
+        );
+        result.stdout = `${result.stdout}\n\n${lines.join("\n")}`;
+      }
+      return result;
+    }
+
+    case "import": {
+      const targets = positional.slice(1);
+      if (targets.length === 0)
+        return usageError("usage: loredown import <file-or-dir…> --kind <kind>");
+      const located = requireLore(cwd, flags);
+      if ("code" in located) return located;
+      const { load } = located;
+      if (flags.kind === undefined) {
+        return usageError(
+          "import requires --kind <kind> (judgment stays with you — pick the closest, fix per page during curation)",
+        );
+      }
+      const today = new Date().toISOString().slice(0, 10);
+      const result = importPages(load.loreDir, load.config, targets, {
+        kind: flags.kind,
+        cwd,
+        dryRun: flags.dryRun,
+        today,
+      });
+      if (result.error !== undefined) return usageError(result.error);
+      const verb = flags.dryRun ? "would create" : "created";
+      const lines = result.created.map((c) => `${verb} ${c.file}  (from ${c.from})`);
+      for (const s of result.skipped) lines.push(`skipped ${s.from}: ${s.reason}`);
+      lines.push(
+        "",
+        `${result.created.length} page${result.created.length === 1 ? "" : "s"} imported, ${result.skipped.length} skipped — pages carry \`imported: true\`; curate (derivability test, split, re-anchor) and remove the marker`,
+        "then run: npx loredown index && npx loredown lint",
+      );
+      return { code: 0, stdout: lines.join("\n"), stderr: "" };
     }
 
     case "trace": {

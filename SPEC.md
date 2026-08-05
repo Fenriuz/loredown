@@ -86,8 +86,9 @@ logs before touching the handler.
 | `status` | yes | `active` \| `superseded` \| `archived`. Non-active pages are excluded from the index body and listed in an "archive" tail section. |
 | `created` / `updated` | yes | ISO dates (`YYYY-MM-DD`). `created` never changes; `updated` bumps on any content edit. |
 | `provenance` | yes | `agent` (tool family: `claude-code`, `cursor`, `codex`, `human`, …), `actor` (accountable human — normally the PR author), `task` (PR, ticket, or branch that produced the knowledge). |
-| `sources` | yes, ≥ 1 | Evidence anchors. Path sources: repo-relative `path` + short `sha` of HEAD at verification time + optional `note`. URL sources: `url` + `accessed` date. |
+| `sources` | yes, ≥ 1 | Evidence anchors. Path sources: repo-relative `path` + short `sha` of HEAD at verification time + optional `note` + optional `repo` naming a sibling checkout declared in `config.repos` (§9). URL sources: `url` + `accessed` date. |
 | `supersedes` | no | Id of an older page; lint requires the target to exist with `status: superseded`. |
+| `imported` | no | `true` marks a page imported from a pre-existing KB and pending curation (§8, §14 `import`). Lint downgrades the hard body-budget error to a warning and emits an `IMPORTED` warning until the field is removed. |
 
 ### Body rules
 
@@ -159,19 +160,22 @@ Filed after PR #123 debugging session.
 
 **No secrets.** Lint (`scan.secrets`, default `error`) runs pattern checks (key/token shapes, high-entropy strings, credential-looking assignments) on all page content. CI treats this as a hard failure.
 
-**Budgets.** Per page: body ≤ `budgets.page_body_lines` (default 40). Per task: agents add or update at most `budgets.pages_per_task` (default 3) pages — forcing selection of what actually mattered.
+**Budgets.** Per page: body ≤ `budgets.page_body_lines` (default 40). Per task: agents add or update at most `budgets.pages_per_task` (default 3) pages — forcing selection of what actually mattered. Over-budget findings include a *split hint* listing the page's `##` headings — the usual seams for splitting one trench-coat page into several facts. Pages marked `imported: true` (§3) get the hard-limit error downgraded to a warning so a migrated KB can land in one reviewable PR and be split incrementally; the per-page `IMPORTED` warning keeps the debt visible until the marker is removed.
 
 ## 9. Drift and verification
 
 Pages decay because the code moves under them. The drift model makes that visible cheaply:
 
-- Each path source records the short `sha` of HEAD at the moment the claim was last verified against that file.
+- Each path source records the short `sha` of HEAD at the moment the claim was last verified against that file — the HEAD of the repo the file lives in.
 - `loredown drift` checks every path source of every active page:
-  - path no longer exists at HEAD → **error** (the page's evidence is gone);
-  - `git log <sha>..HEAD -- <path>` is non-empty → **warning**: "page may be stale — N commits touched its source since verification".
+  - path missing from the tree **and** from disk → **error `SRC_GONE`** (the page's evidence is gone);
+  - path missing from the tree but **present on disk** → **error `SRC_UNTRACKED`** (nested repo or ignored path — declare a `repos:` mapping or fix the anchor). These are different facts and get different diagnostics;
+  - `git log <sha>..HEAD -- <path>` is non-empty → **warning `SRC_STALE`**: "page may be stale — N commits touched its source since verification".
+- **Sibling repos (the umbrella/docs-repo pattern).** Knowledge repos often document code that lives in *other* git repos (handbook repos, umbrella repos over independently-deployed modules). Nested checkouts appear in the parent tree only as gitlinks, which `git cat-file` cannot resolve through. `config.repos` maps a repo name to a local checkout (relative path only — mappings must travel with clones); a path source carrying `repo: <name>` is verified by running the same two git queries inside that checkout. When the checkout is **absent** (CI, fresh clone), those sources are **skipped and reported, never findings** — "not verifiable here" is a different fact from "the evidence is gone", and must not fail a pipeline. A `repo:` name not declared in config is a lint **error** (`SRC_REPO`).
 - Re-verification is a judgment call, not a mechanical one: an agent or human re-reads the page against the current source, fixes or confirms it, updates the `sha`s and `updated`. `drift` never auto-updates anchors — that would silently convert "stale" into "falsely fresh".
-- URL sources are not drift-checked in v0.1 (`accessed` date is displayed, nothing more).
+- URL sources: when `budgets.url_accessed_max_age_days` is set (> 0), `drift` warns (`URL_STALE`) on active pages whose `accessed` date is older than the horizon — an offline nudge to re-check external evidence. Default 0 (off). No network I/O is ever performed.
 - Intended cadence: `drift` runs in CI on a schedule (weekly) or pre-release, feeding re-verification tasks to whoever is in the code anyway.
+- **Determinism and security boundaries.** `drift` is deliberately *environment-relative*: it consults git state, sibling checkouts, and (for the URL age check) the current date. The byte-determinism contract (§6) binds `index` and `lint`, never `drift`. A `repos:` value is a directory path, not an executable — the §15 rule that config never names commands is preserved; drift only ever runs `git` read plumbing inside checkouts the developer already trusts enough to have cloned.
 
 ## 10. Operations (agent workflows)
 
@@ -247,6 +251,7 @@ v0.1 ships a single root `lore/`. The scoping extension, so the schema doesn't p
 | `drift` | §9 checks against git HEAD. | 0 clean / 1 any finding / 2 usage |
 | `trace <id>` | Print a page's provenance, sources with current drift status, inbound links, and log entries mentioning it. | 0 / 2 |
 | `install <tool>` | Idempotently install an agent adapter (§12): fenced block in AGENTS.md, tool-specific files. Fences are upserted; content outside them is never touched. | 0 / 2 |
+| `import <path…> --kind <kind>` | Scaffold pages from existing markdown files (adoption path): H1 → title, body preserved, `provenance` from the file's git history, source anchored to the *original file* at HEAD (truthful and lint-valid by construction — no TODOs), `imported: true` marker. Judgment (derivability, kind, splitting) stays with the human/agent. Slug collisions are skipped and reported. | 0 / 2 |
 
 Error output goes to stderr; findings go to stdout (human format or `--json`).
 
@@ -257,13 +262,16 @@ schema_version: 1        # migrations bump this; CLI refuses newer-than-known
 budgets:
   page_body_lines: 40
   pages_per_task: 3
+  url_accessed_max_age_days: 0   # drift-only URL staleness horizon; 0 disables
 scan:
   instructions: warn     # off | warn | error
   secrets: error         # warn | error  (cannot be disabled)
 kinds: []                # extra kinds beyond the built-ins, e.g. [runbook]
+repos: {}                # sibling checkouts for cross-repo anchors (§9),
+                         # e.g. rfid-svc: ../rfid-svc — RELATIVE paths only
 ```
 
-Config is data only. **No config key will ever name an executable or shell command** — a malicious PR must not be able to turn the CLI into an execution vector (see §16).
+Config is data only. **No config key will ever name an executable or shell command** — a malicious PR must not be able to turn the CLI into an execution vector (see §16). `repos:` values are directories, not commands, and must be relative paths (absolute paths are machine-specific and break the mapping for every other clone).
 
 ## 16. Security model
 

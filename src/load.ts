@@ -14,6 +14,7 @@ import {
   ISO_DATE,
   KNOWN_SCHEMA_VERSION,
   type Page,
+  type PathSource,
   SHORT_SHA,
   SLUG,
   type Source,
@@ -106,7 +107,7 @@ function checkUnknownKeys(
   }
 }
 
-const CONFIG_KEYS = ["schema_version", "budgets", "scan", "kinds"] as const;
+const CONFIG_KEYS = ["schema_version", "budgets", "scan", "kinds", "repos"] as const;
 
 export function loadConfig(loreDir: string): {
   config: Config;
@@ -153,7 +154,7 @@ export function loadConfig(loreDir: string): {
         ctx,
         "CONFIG_FIELD",
         budgets,
-        ["page_body_lines", "pages_per_task"],
+        ["page_body_lines", "pages_per_task", "url_accessed_max_age_days"],
         "budgets.",
       );
       for (const [key, target] of [
@@ -166,6 +167,14 @@ export function loadConfig(loreDir: string): {
           err(ctx, "CONFIG_FIELD", `budgets.${key}: expected a positive integer`);
         } else {
           config.budgets[target] = Number(value);
+        }
+      }
+      const urlAge = budgets.url_accessed_max_age_days;
+      if (urlAge !== undefined) {
+        if (typeof urlAge !== "string" || !/^\d+$/.test(urlAge)) {
+          err(ctx, "CONFIG_FIELD", "budgets.url_accessed_max_age_days: expected an integer ≥ 0");
+        } else {
+          config.budgets.urlAccessedMaxAgeDays = Number(urlAge);
         }
       }
     }
@@ -196,6 +205,27 @@ export function loadConfig(loreDir: string): {
     }
   }
 
+  const repos = map.repos;
+  if (repos !== undefined) {
+    if (!isMap(repos)) {
+      err(ctx, "CONFIG_FIELD", "repos: expected a map of repo name → relative path");
+    } else {
+      for (const [name, value] of Object.entries(repos)) {
+        if (typeof value !== "string" || value === "") {
+          err(ctx, "CONFIG_FIELD", `repos.${name}: expected a relative path`);
+        } else if (value.startsWith("/") || /^[A-Za-z]:[\\/]/.test(value)) {
+          err(
+            ctx,
+            "CONFIG_FIELD",
+            `repos.${name}: absolute paths are machine-specific — use a path relative to the lore's parent directory`,
+          );
+        } else {
+          config.repos[name] = value;
+        }
+      }
+    }
+  }
+
   const kinds = map.kinds;
   if (kinds !== undefined) {
     if (!Array.isArray(kinds) || kinds.some((k) => typeof k !== "string")) {
@@ -221,6 +251,7 @@ const PAGE_KEYS = [
   "provenance",
   "sources",
   "supersedes",
+  "imported",
 ] as const;
 
 function validateSources(ctx: FieldContext, value: YamlValue | undefined): Source[] | null {
@@ -242,7 +273,7 @@ function validateSources(ctx: FieldContext, value: YamlValue | undefined): Sourc
       return;
     }
     if (item.path !== undefined) {
-      checkUnknownKeys(ctx, "FM_FIELD", item, ["path", "sha", "note"], where);
+      checkUnknownKeys(ctx, "FM_FIELD", item, ["path", "sha", "note", "repo"], where);
       const path = takeString(ctx, "FM_FIELD", item, "path", where);
       const sha = takeString(ctx, "FM_FIELD", item, "sha", where);
       if (path === null || sha === null) {
@@ -260,7 +291,16 @@ function validateSources(ctx: FieldContext, value: YamlValue | undefined): Sourc
         ok = false;
         return;
       }
-      sources.push(note === undefined ? { path, sha } : { path, sha, note });
+      const repo = item.repo;
+      if (repo !== undefined && (typeof repo !== "string" || repo === "")) {
+        err(ctx, "FM_FIELD", `${where}repo: expected a repo name declared in config.repos`);
+        ok = false;
+        return;
+      }
+      const source: PathSource = { path, sha };
+      if (note !== undefined) source.note = note as string;
+      if (repo !== undefined) source.repo = repo as string;
+      sources.push(source);
       return;
     }
     if (item.url !== undefined) {
@@ -357,6 +397,16 @@ function validatePage(
     }
   }
 
+  let imported = false;
+  const impValue = fm.imported;
+  if (impValue !== undefined) {
+    if (impValue !== "true") {
+      err(ctx, "FM_FIELD", "imported: expected true (or omit the field entirely)");
+    } else {
+      imported = true;
+    }
+  }
+
   if (
     id === null ||
     title === null ||
@@ -386,6 +436,7 @@ function validatePage(
     file: relFile,
   };
   if (supersedes !== undefined) page.supersedes = supersedes;
+  if (imported) page.imported = true;
   return { page, findings };
 }
 
