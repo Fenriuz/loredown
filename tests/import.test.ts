@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { initLore } from "../src/init.js";
 import { lintLore } from "../src/lint.js";
@@ -30,6 +30,33 @@ function makeWikiRepo(): string {
   initLore(dir, false, "2026-08");
   sh(dir, ["add", "-A"]);
   sh(dir, ["commit", "-m", "wiki + lore"]);
+  return dir;
+}
+
+/** A git repo with lore initialized, arbitrary files, optional config extras and setup hook. */
+function makeRepo(
+  files: Record<string, string>,
+  configExtra = "",
+  setup?: (root: string) => void,
+): string {
+  const dir = mkdtempSync(join(tmpdir(), "loredown-import-"));
+  sh(dir, ["init", "-b", "main"]);
+  sh(dir, ["config", "user.email", "test@example.com"]);
+  sh(dir, ["config", "user.name", "Test"]);
+  for (const [rel, content] of Object.entries(files)) {
+    mkdirSync(dirname(join(dir, rel)), { recursive: true });
+    writeFileSync(join(dir, rel), content);
+  }
+  initLore(dir, false, "2026-08");
+  if (configExtra !== "") {
+    writeFileSync(
+      join(dir, "lore/config.yaml"),
+      `schema_version: 1\nbudgets:\n  page_body_lines: 40\n  pages_per_task: 3\nscan:\n  instructions: warn\n  secrets: error\nkinds: []\n${configExtra}`,
+    );
+  }
+  setup?.(dir);
+  sh(dir, ["add", "-A"]);
+  sh(dir, ["commit", "-m", "seed"]);
   return dir;
 }
 
@@ -91,6 +118,173 @@ describe("loredown import", () => {
     const dry = run(["import", "docs", "--kind", "map", "--dry-run"], dir);
     expect(dry.code).toBe(0);
     expect(existsSync(join(dir, "lore/pages/map/notes.md"))).toBe(false);
+  });
+
+  it("rewrites bare wiki-links to the id namespace, preserving rendered text", () => {
+    const dir = makeRepo({
+      "docs/alpha.md":
+        "# Alpha\n\nSee [[beta]] and [[beta|the beta system]] and [[Beta Service]] and [[decision/beta]] and [[never-here]].\n",
+      "docs/beta.md": "# Beta\n\nBack to [[alpha]].\n",
+      "docs/Beta Service.md": "# Beta Service\n\nA service.\n",
+    });
+    const result = run(["import", "docs", "--kind", "decision"], dir);
+    expect(result.code, result.stderr).toBe(0);
+    expect(result.stdout).toContain("4 wiki-links rewritten, 1 left for review");
+    const alpha = readFileSync(join(dir, "lore/pages/decision/alpha.md"), "utf8");
+    expect(alpha).toContain("[[decision/beta|beta]]");
+    expect(alpha).toContain("[[decision/beta|the beta system]]");
+    expect(alpha).toContain("[[decision/beta-service|Beta Service]]");
+    expect(alpha).toContain("and [[decision/beta]] and"); // already namespaced — untouched
+    expect(alpha).toContain("[[never-here]]"); // unresolvable — left for lint
+    run(["index", "--lore", join(dir, "lore")], dir);
+    const broken = lintLore(loadLore(join(dir, "lore"))).filter((f) => f.code === "LINK_BROKEN");
+    expect(broken).toHaveLength(1);
+    expect(broken[0]?.message).toContain("[[never-here]]");
+  });
+
+  it("leaves ambiguous bare targets alone — several kinds share the slug", () => {
+    const dir = makeRepo({
+      "docs/alpha.md": "# Alpha\n\nSee [[beta]].\n",
+      "docs/beta.md": "# Beta\n\nBack to [[alpha]].\n",
+    });
+    mkdirSync(join(dir, "lore/pages/glossary"), { recursive: true });
+    writeFileSync(
+      join(dir, "lore/pages/glossary/beta.md"),
+      `---\nid: glossary/beta\ntitle: Beta the term\nkind: glossary\nstatus: active\ncreated: 2026-08-01\nupdated: 2026-08-01\nprovenance:\n  agent: human\n  actor: test\n  task: T-1\nsources:\n  - url: https://example.com\n    accessed: 2026-08-01\n---\n\nBody.\n`,
+    );
+    const result = run(["import", "docs", "--kind", "decision"], dir);
+    expect(result.stdout).toContain("1 wiki-link rewritten, 1 left for review");
+    const alpha = readFileSync(join(dir, "lore/pages/decision/alpha.md"), "utf8");
+    expect(alpha).toContain("See [[beta]]."); // guessing would be worse than reporting
+  });
+
+  it("converges across multi-kind batches: later runs resolve earlier forward links", () => {
+    const dir = makeRepo({
+      "docs/g/cap.md": "# Cap\n\nUses [[term]].\n",
+      "docs/t/term.md": "# Term\n\nDefined for [[cap]].\n",
+    });
+    const first = run(["import", "docs/g", "--kind", "gotcha"], dir);
+    expect(first.stdout).toContain("0 wiki-links rewritten, 1 left for review");
+
+    const dry = run(["import", "docs/t", "--kind", "glossary", "--dry-run"], dir);
+    expect(dry.stdout).toContain("would rewrite links in 1 previously imported page");
+    expect(dry.stdout).toContain("2 wiki-links rewritten, 0 left for review");
+    expect(readFileSync(join(dir, "lore/pages/gotcha/cap.md"), "utf8")).toContain("[[term]]");
+
+    const second = run(["import", "docs/t", "--kind", "glossary"], dir);
+    expect(second.stdout).toContain("rewrote links in 1 previously imported page");
+    expect(second.stdout).toContain("2 wiki-links rewritten, 0 left for review");
+    expect(readFileSync(join(dir, "lore/pages/gotcha/cap.md"), "utf8")).toContain(
+      "[[glossary/term|term]]",
+    );
+    expect(readFileSync(join(dir, "lore/pages/glossary/term.md"), "utf8")).toContain(
+      "[[gotcha/cap|cap]]",
+    );
+  });
+
+  it("strips pre-existing frontmatter, adopting title and valid dates, preserving the rest", () => {
+    const dir = makeRepo({
+      "README.md": "readme\n",
+      "docs/gamma.md":
+        "---\ntitle: Gamma service quirk\ncategory: operations\ncreated: 2026-04-20\nupdated: not-a-date\nsources: [services/gamma/handler.ts, README.md]\n---\n\n# Gamma service quirk\n\nGamma retries silently.\n",
+    });
+    const result = run(["import", "docs", "--kind", "gotcha"], dir);
+    expect(result.code, result.stderr).toBe(0);
+    const load = loadLore(join(dir, "lore"));
+    expect(load.findings).toEqual([]);
+    const gamma = load.pages.find((p) => p.id === "gotcha/gamma");
+    expect(gamma?.title).toBe("Gamma service quirk");
+    expect(gamma?.created).toBe("2026-04-20"); // the original KB's date, not git's
+    expect(gamma?.body.trim()).toBe("Gamma retries silently."); // no leftover block, H1 stripped
+    const anchor = gamma?.sources[0];
+    expect(anchor !== undefined && "path" in anchor && anchor.note).toContain(
+      "unresolved sources: services/gamma/handler.ts",
+    );
+    expect(anchor !== undefined && "path" in anchor && anchor.note).toContain(
+      "unmapped: category=operations, updated=not-a-date",
+    );
+    const readme = gamma?.sources[1];
+    expect(readme !== undefined && "path" in readme && readme.path).toBe("README.md");
+  });
+
+  it("keeps a divergent H1 in the body when frontmatter supplies the title", () => {
+    const dir = makeRepo({
+      "docs/delta.md": "---\ntitle: Custom Title\n---\n\n# Different Heading\n\nBody text.\n",
+    });
+    run(["import", "docs", "--kind", "map"], dir);
+    const delta = loadLore(join(dir, "lore")).pages.find((p) => p.id === "map/delta");
+    expect(delta?.title).toBe("Custom Title");
+    expect(delta?.body).toContain("# Different Heading"); // divergent heading is content
+  });
+
+  it("reports unparseable original frontmatter and leaves it in the body untouched", () => {
+    const dir = makeRepo({
+      "docs/eps.md": "---\n:: not yaml at all ::\n---\n\n# Eps\n\nBody.\n",
+    });
+    const result = run(["import", "docs", "--kind", "map"], dir);
+    expect(result.stdout).toContain(
+      "note docs/eps.md: original frontmatter is not the strict subset",
+    );
+    const eps = loadLore(join(dir, "lore")).pages.find((p) => p.id === "map/eps");
+    expect(eps?.title).toBe("Eps");
+    expect(eps?.body).toContain(":: not yaml at all ::"); // visible, never guessed at
+  });
+
+  it("harvests sources: entries into repo:/path anchors that verify — never born SRC_GONE", () => {
+    const dir = makeRepo(
+      {
+        "README.md": "readme\n",
+        ".gitignore": "svc/\n",
+        "docs/page.md":
+          "---\nsources: [svc/src/main.ts, svc/functions/Config/, README.md, svc/missing.ts, ghost/x.ts, gone/lib.ts]\n---\n\n# Page\n\nBody.\n",
+      },
+      "repos:\n  svc: ./svc\n  gone: ./gone\n",
+      (root) => {
+        const svc = join(root, "svc");
+        mkdirSync(join(svc, "src"), { recursive: true });
+        mkdirSync(join(svc, "functions/Config"), { recursive: true });
+        sh(svc, ["init", "-b", "main"]);
+        sh(svc, ["config", "user.email", "test@example.com"]);
+        sh(svc, ["config", "user.name", "Test"]);
+        writeFileSync(join(svc, "src/main.ts"), "export {};\n");
+        writeFileSync(join(svc, "functions/Config/index.ts"), "export {};\n");
+        sh(svc, ["add", "-A"]);
+        sh(svc, ["commit", "-m", "svc"]);
+      },
+    );
+    const svcSha = sh(join(dir, "svc"), ["rev-parse", "--short", "HEAD"]);
+    const result = run(["import", "docs", "--kind", "map"], dir);
+    expect(result.code, result.stderr).toBe(0);
+    const load = loadLore(join(dir, "lore"));
+    expect(load.findings).toEqual([]);
+    const page = load.pages.find((p) => p.id === "map/page");
+    const anchors = (page?.sources ?? []).filter((s) => "path" in s);
+    expect(anchors.map((a) => ("repo" in a ? `${a.repo}:${a.path}` : a.path))).toEqual([
+      "docs/page.md", // the import anchor — always the provenance trail
+      "svc:src/main.ts",
+      "svc:functions/Config", // directory anchor, trailing slash normalized
+      "README.md",
+    ]);
+    expect(anchors[1]?.sha).toBe(svcSha);
+    expect(anchors[0]?.note).toContain(
+      "unresolved sources: svc/missing.ts, ghost/x.ts, gone/lib.ts",
+    );
+  });
+
+  it("lint validates only the target of aliased wiki-links", () => {
+    const dir = makeWikiRepo();
+    mkdirSync(join(dir, "lore/pages/decision"), { recursive: true });
+    const page = (slug: string, body: string) =>
+      writeFileSync(
+        join(dir, `lore/pages/decision/${slug}.md`),
+        `---\nid: decision/${slug}\ntitle: Page ${slug}\nkind: decision\nstatus: active\ncreated: 2026-08-01\nupdated: 2026-08-01\nprovenance:\n  agent: human\n  actor: test\n  task: T-1\nsources:\n  - url: https://example.com\n    accessed: 2026-08-01\n---\n\n${body}\n`,
+      );
+    page("target", "The target.");
+    page("linker", "See [[decision/target|the target page]] and [[decision/ghost|nope]].");
+    run(["index", "--lore", join(dir, "lore")], dir);
+    const broken = lintLore(loadLore(join(dir, "lore"))).filter((f) => f.code === "LINK_BROKEN");
+    expect(broken).toHaveLength(1);
+    expect(broken[0]?.message).toContain("[[decision/ghost|nope]]");
   });
 
   it("lint errors SRC_REPO when a source names an undeclared repo", () => {

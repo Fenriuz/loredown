@@ -321,9 +321,15 @@ export function run(argv: readonly string[], cwd = process.cwd()): RunResult {
       const verb = flags.dryRun ? "would create" : "created";
       const lines = result.created.map((c) => `${verb} ${c.file}  (from ${c.from})`);
       for (const s of result.skipped) lines.push(`skipped ${s.from}: ${s.reason}`);
+      for (const n of result.notes) lines.push(`note ${n.from}: ${n.message}`);
+      if (result.pagesRelinked > 0) {
+        lines.push(
+          `${flags.dryRun ? "would rewrite" : "rewrote"} links in ${result.pagesRelinked} previously imported page${result.pagesRelinked === 1 ? "" : "s"} (forward links resolved by this batch)`,
+        );
+      }
       lines.push(
         "",
-        `${result.created.length} page${result.created.length === 1 ? "" : "s"} imported, ${result.skipped.length} skipped — pages carry \`imported: true\`; curate (derivability test, split, re-anchor) and remove the marker`,
+        `${result.created.length} page${result.created.length === 1 ? "" : "s"} imported, ${result.skipped.length} skipped, ${result.linksRewritten} wiki-link${result.linksRewritten === 1 ? "" : "s"} rewritten, ${result.linksLeft} left for review — pages carry \`imported: true\`; curate (derivability test, split, re-anchor) and remove the marker`,
         "then run: npx loredown index && npx loredown lint",
       );
       return { code: 0, stdout: lines.join("\n"), stderr: "" };

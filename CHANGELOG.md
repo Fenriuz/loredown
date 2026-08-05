@@ -4,6 +4,44 @@ All notable changes to loredown are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and the project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] — 2026-08-05
+
+Driven by the second field report from the same umbrella-project team — the
+first real 27-page migration through `import`. Both gaps it surfaced are
+closed; the umbrella/`repos:` pattern itself was verified end-to-end (6/6
+cases) by the reporter against v0.2.0.
+
+### Added
+
+- **Wiki-link display text** — `[[kind/slug|display text]]` (the target-first
+  convention shared by MediaWiki, Obsidian and Logseq): `lint` validates the
+  target and leaves the display free; `trace` counts aliased inbound links.
+- **`import` rewrites wiki-links to the id namespace** — bare targets are
+  slugified and resolved against all lore pages plus the batch; a unique match
+  becomes `[[kind/slug|original text]]` (rendered text preserved), ambiguous or
+  unknown targets are left for lint to flag — guessing would be worse than
+  reporting. Targets already containing `/` are never touched. The pass covers
+  every page still marked `imported: true`, so a KB imported kind by kind
+  converges: later runs resolve the forward links earlier runs could not.
+  Rewritten / left-for-review counts are reported.
+- **`import` harvests pre-existing frontmatter** instead of leaking it into the
+  body: `title` is adopted (a divergent H1 stays in the body — it is content),
+  `created`/`updated` are adopted when they are ISO dates (the original KB's
+  dates survive repo moves that git history does not), and `sources:` entries
+  resolve to real anchors — longest-prefix match against `config.repos` yields
+  `repo:` anchors at the sibling's HEAD; paths tracked in this repo become
+  plain anchors; directory paths work. An entry becomes an anchor only when it
+  verifies — **an anchor is never born `SRC_GONE`**. Everything unadopted
+  (unknown keys, unresolved entries, unparseable frontmatter) is preserved
+  visibly: in the import anchor's note or, for unparseable blocks, in the body
+  with a per-file report line.
+
+### Changed
+
+- SPEC §14 gains the full **import contract** ("no judgment, no information
+  loss") and the documented migration order: import → re-anchor to code →
+  only then delete the old KB.
+
 ## [0.2.0] — 2026-08-05
 
 Driven by the first field report — a multi-repo *umbrella* project (docs + wiki

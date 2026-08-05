@@ -51,8 +51,22 @@ Keep it honest in CI:
 | `index [--check]` | Deterministically rebuild the catalog (`--check` for CI) |
 | `drift` | Flag pages whose source anchors changed since last verification |
 | `trace <id>` | Provenance: who wrote a page, from which task, against which sources |
+| `import <path…> --kind <kind>` | Migrate an existing markdown KB: one deterministic, judgment-free transform per file |
 
 Every command supports `--json`, `--dry-run`, and `--verbose`. The CLI has **zero runtime dependencies** and performs **no network I/O**.
+
+### Migrating an existing KB
+
+`loredown import` scaffolds pages from your current wiki (Obsidian vault, docs folder, any
+markdown): it harvests pre-existing frontmatter (title, dates, `sources:` entries become real
+anchors via `config.repos`), rewrites bare wiki-links to the `kind/slug` namespace (display
+text preserved — ambiguous links are left for review, never guessed), and marks every page
+`imported: true` so the whole migration lands as one reviewable PR. Import kind by kind; later
+runs resolve the links earlier runs could not.
+
+The safe order: **import → re-anchor pages to code → delete the old KB.** Imported pages are
+anchored to their original files; delete those first and every uncurated page flips to
+`SRC_GONE` at once.
 
 ## The idea
 

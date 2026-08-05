@@ -96,6 +96,16 @@ export const SHORT_SHA = /^[0-9a-f]{7,40}$/;
 export const SLUG = /^[a-z0-9][a-z0-9-]*$/;
 export const TITLE_MAX = 80;
 
+/** Wiki-link syntax (SPEC §3): `[[target]]` or `[[target|display text]]`. */
+export const WIKILINK = /\[\[([^\]\n]+)\]\]/g;
+
+/** Split a wiki-link's inner text into target and optional display alias. */
+export function splitWikiLink(inner: string): { target: string; alias: string | null } {
+  const pipe = inner.indexOf("|");
+  if (pipe === -1) return { target: inner, alias: null };
+  return { target: inner.slice(0, pipe), alias: inner.slice(pipe + 1) };
+}
+
 export function isBuiltinKind(kind: string): kind is BuiltinKind {
   return (BUILTIN_KINDS as readonly string[]).includes(kind);
 }

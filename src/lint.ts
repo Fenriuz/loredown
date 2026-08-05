@@ -3,9 +3,7 @@ import { basename, join } from "node:path";
 import { byteCompare, type Finding, type Level, sortFindings } from "./findings.js";
 import { generateIndex } from "./index-gen.js";
 import type { LoadResult } from "./load.js";
-import { allowedKinds, TITLE_MAX } from "./model.js";
-
-const WIKILINK = /\[\[([^\]\n]+)\]\]/g;
+import { allowedKinds, splitWikiLink, TITLE_MAX, WIKILINK } from "./model.js";
 
 /**
  * Agent-hijacking phrasing (SPEC §8). Targets instructions aimed at the
@@ -132,9 +130,10 @@ export function lintLore(load: LoadResult): Finding[] {
     }
 
     for (const match of page.body.matchAll(WIKILINK)) {
-      const target = match[1] as string;
-      if (!ids.has(target)) {
-        add("error", "LINK_BROKEN", file, `wiki-link [[${target}]] has no matching page`);
+      const inner = match[1] as string;
+      // `[[target|display]]`: only the target must resolve; display text is free (SPEC §3).
+      if (!ids.has(splitWikiLink(inner).target)) {
+        add("error", "LINK_BROKEN", file, `wiki-link [[${inner}]] has no matching page`);
       }
     }
 
