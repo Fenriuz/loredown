@@ -1,6 +1,6 @@
 {
   "name": "loredown",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "description": "Agent-written team knowledge as markdown in your repo — reviewed in pull requests, checked for staleness. Claude Code · Cursor · Codex.",
   "keywords": [
     "knowledge-base",

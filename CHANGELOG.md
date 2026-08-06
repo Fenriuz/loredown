@@ -4,6 +4,51 @@ All notable changes to loredown are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and the project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.6.0] — 2026-08-06
+
+Driven by our own dogfooding this time: five consecutive cycles in this repo
+staled 4–6 of 13 lore pages after SPEC edits to unrelated sections, and
+re-verification degenerated into a mechanical sha bump — a false positive
+training the operator to rubber-stamp, the exact failure drift exists to
+prevent. This release makes drift's signal precise, and performs the project's
+first schema version bump doing it.
+
+### Added
+
+- **Section anchors** (`schema_version: 2`) — a path source may carry
+  `section: "## Heading"` (always quoted — unquoted, the ` #` starts a YAML
+  comment): the exact heading line the claim cites. Drift compares only that
+  region between the anchored sha and HEAD, so edits to the rest of the file
+  no longer stale the page. Renamed/removed headings get their own diagnostic
+  (`SRC_SECTION`: warn at HEAD; error when the heading was never present at
+  the anchor — checked *before* any fast path, so a broken anchor cannot hide
+  behind an unchanged file); duplicated headings are flagged as ambiguous,
+  never guessed at.
+- **Content-identical is not stale** — drift compares the path's tree entry
+  (mode, type, object id) between anchor and HEAD: reverts, merges, and
+  touch-only history no longer warn. Entries rather than blob ids, so a mode
+  flip with identical bytes still counts. An anchor whose content differs with
+  *no* connecting commits now warns — it never did before.
+- **One verdict engine** — `trace` renders the same per-source status drift
+  computes (`pathSourceStatus`), so the two commands can no longer disagree
+  about an anchor; trace gains its first tests.
+
+### Fixed
+
+- **Uniform schema refusal** — previously only `index` consulted the
+  schema-too-new flag: `drift` on a newer-schema lore silently dropped the
+  unreadable pages and reported **clean** (exit 0), and `trace` claimed the
+  page did not exist. Every lore-reading command now refuses with a single
+  `SCHEMA_VERSION` error and exit 1, `install` included.
+
+### Migration
+
+`schema_version: 2` is opt-in and only needed for `section:` anchors — `init`
+still writes version 1, and a version-1 lore is untouched by this release.
+Before declaring version 2: pin CI to loredown ≥ 0.6 and re-run
+`loredown install <tool>` (0.5's `drift` reports clean on a version-2 lore —
+SPEC §17 has the full compatibility note).
+
 ## [0.5.1] — 2026-08-06
 
 ### Added
