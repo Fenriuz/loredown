@@ -11,7 +11,7 @@ provenance:
   task: "triage review after third field report"
 sources:
   - path: CHANGELOG.md
-    sha: "5efc4a1"
+    sha: "170c129"
     note: the field-report cycles that shaped the rubric
 ---
 
