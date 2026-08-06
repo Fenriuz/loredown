@@ -1,3 +1,5 @@
+import { red, yellow } from "./color.js";
+
 export type Level = "error" | "warn";
 
 export interface Finding {
@@ -39,7 +41,8 @@ export function sortFindings(findings: Finding[]): Finding[] {
   );
 }
 
-export function formatHuman(findings: readonly Finding[]): string {
+/** `color` arrives as data from the process edge (SPEC §14) — never read TTY/env here. */
+export function formatHuman(findings: readonly Finding[], color = false): string {
   if (findings.length === 0) return "No findings.";
   const out: string[] = [];
   let currentFile = "";
@@ -49,14 +52,17 @@ export function formatHuman(findings: readonly Finding[]): string {
       out.push(f.file);
       currentFile = f.file;
     }
-    out.push(`  ${f.level === "error" ? "error" : "warn "}  ${f.code}  ${f.message}`);
+    const label = f.level === "error" ? red("error", color) : `${yellow("warn", color)} `;
+    out.push(`  ${label}  ${f.code}  ${f.message}`);
   }
   const s = summarize(findings);
+  const errPart = `${s.errors} error${s.errors === 1 ? "" : "s"}`;
+  const warnPart = `${s.warnings} warning${s.warnings === 1 ? "" : "s"}`;
   out.push("");
   out.push(
-    `${findings.length} finding${findings.length === 1 ? "" : "s"}: ${s.errors} error${
-      s.errors === 1 ? "" : "s"
-    }, ${s.warnings} warning${s.warnings === 1 ? "" : "s"}`,
+    `${findings.length} finding${findings.length === 1 ? "" : "s"}: ${
+      s.errors > 0 ? red(errPart, color) : errPart
+    }, ${s.warnings > 0 ? yellow(warnPart, color) : warnPart}`,
   );
   return out.join("\n");
 }

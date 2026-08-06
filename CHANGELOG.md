@@ -4,6 +4,19 @@ All notable changes to loredown are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and the project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.5.1] — 2026-08-06
+
+### Added
+
+- **Severity color in human output** — `error` red, `warn` yellow, plus the
+  non-zero counts in the summary line; nothing else. Emitted only when stdout
+  is a TTY, `NO_COLOR` is unset or empty ([no-color.org](https://no-color.org)),
+  and `TERM` is not `dumb`. The decision is computed once at the process edge
+  (the CLI entry) and travels inward as data — no code below it reads TTY or
+  environment state — so `--json`, every non-TTY stream, every generated file,
+  and every library/test call are byte-identical with color on or off. The
+  existing golden fixtures pass without a single edit, which is the point.
+
 ## [0.5.0] — 2026-08-06
 
 Driven by the fourth field report — the same team's migration done for real and

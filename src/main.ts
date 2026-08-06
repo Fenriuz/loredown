@@ -135,17 +135,31 @@ function requireLore(cwd: string, flags: Flags): { load: LoadResult } | RunResul
   return { load: loadLore(loreDir) };
 }
 
-function findingsResult(findings: Finding[], flags: Flags, failOnWarn: boolean): RunResult {
+function findingsResult(
+  findings: Finding[],
+  flags: Flags,
+  failOnWarn: boolean,
+  color = false,
+): RunResult {
   const summary = summarize(findings);
   const failed = failOnWarn ? findings.length > 0 : summary.errors > 0;
   return {
     code: failed ? 1 : 0,
-    stdout: flags.json ? formatJson(findings) : formatHuman(findings),
+    stdout: flags.json ? formatJson(findings) : formatHuman(findings, color),
     stderr: "",
   };
 }
 
-export function run(argv: readonly string[], cwd = process.cwd()): RunResult {
+export interface RunOptions {
+  /** Colorize human output. Computed ONCE at the process edge (cli.ts) — SPEC §14. */
+  color?: boolean;
+}
+
+export function run(
+  argv: readonly string[],
+  cwd = process.cwd(),
+  opts: RunOptions = {},
+): RunResult {
   const args = argv.filter((a) => a.length > 0);
   if (args.length === 0 || args.includes("--help") || args.includes("-h")) {
     return { code: 0, stdout: USAGE, stderr: "" };
@@ -228,7 +242,7 @@ export function run(argv: readonly string[], cwd = process.cwd()): RunResult {
       if ("code" in located) return located;
       const { load } = located;
       const findings = lintLore(load);
-      const result = findingsResult(findings, flags, false);
+      const result = findingsResult(findings, flags, false, opts.color === true);
       if (flags.verbose && !flags.json) {
         result.stdout = `checked ${load.pages.length} page${load.pages.length === 1 ? "" : "s"} in ${basename(load.loreDir)}/\n${result.stdout}`;
       }
@@ -239,7 +253,8 @@ export function run(argv: readonly string[], cwd = process.cwd()): RunResult {
       const located = requireLore(cwd, flags);
       if ("code" in located) return located;
       const { load } = located;
-      if (load.schemaTooNew) return findingsResult(load.findings, flags, false);
+      if (load.schemaTooNew)
+        return findingsResult(load.findings, flags, false, opts.color === true);
       const fresh = generateIndex(load.config, load.pages);
       const indexPath = join(load.loreDir, "index.md");
       const current = existsSync(indexPath) ? readFileSync(indexPath, "utf8") : null;
@@ -287,7 +302,7 @@ export function run(argv: readonly string[], cwd = process.cwd()): RunResult {
           stderr: "",
         };
       }
-      const result = findingsResult(findings, flags, true);
+      const result = findingsResult(findings, flags, true, opts.color === true);
       if (skipped.length > 0) {
         const lines = skipped.map(
           (s) =>
