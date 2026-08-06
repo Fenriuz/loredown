@@ -269,6 +269,15 @@ v0.1 ships a single root `lore/`. The scoping extension, so the schema doesn't p
 
 Error output goes to stderr; findings go to stdout (human format or `--json`).
 
+Human-format output colors the severity labels (`error` red, `warn` yellow) and the non-zero
+counts in the summary line — nothing else — and only when **all** of these hold: stdout is a
+TTY, `NO_COLOR` is unset or empty ([no-color.org](https://no-color.org)), and `TERM` is not
+`dumb`. The decision is computed once at the process edge and passed inward as data — no code
+below the CLI entry may read TTY or environment state, so library callers and tests get
+byte-identical output regardless of where they run. `--json` output, every non-TTY stream, and
+every generated file are byte-identical with color on or off; an escape sequence reaching any
+of them is a determinism bug.
+
 ### Import contract
 
 `import` is mechanical: it applies **no judgment and loses no information**. Judgment
