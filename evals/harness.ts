@@ -54,9 +54,9 @@ export function commitAll(dir: string, message: string): string {
   return git(dir, ["rev-parse", "--short", "HEAD"]);
 }
 
-/** The entry block for eval fixtures — plain `loredown` (the shim), not `npx loredown`. */
+/** The entry block for eval fixtures — plain `loredown` (the shim), not the pinned `npx loredown@x.y.z` (SPEC §12) real installs write: the sandbox provides the CLI on PATH. */
 export function fixtureEntryBlock(): string {
-  return ENTRY_BLOCK.replaceAll("npx loredown", "loredown");
+  return ENTRY_BLOCK.replace(/npx loredown(@\S+)?/g, "loredown");
 }
 
 /**
