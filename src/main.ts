@@ -123,7 +123,7 @@ function usageError(message: string): RunResult {
   return { code: 2, stdout: "", stderr: `${message}\nRun "loredown --help" for usage.` };
 }
 
-function requireLore(cwd: string, flags: Flags): { load: LoadResult } | RunResult {
+function requireLore(cwd: string, flags: Flags, color = false): { load: LoadResult } | RunResult {
   const loreDir = findLoreDir(cwd, flags.lore);
   if (loreDir === null) {
     return usageError(
@@ -132,7 +132,15 @@ function requireLore(cwd: string, flags: Flags): { load: LoadResult } | RunResul
         : `no config.yaml in --lore path "${flags.lore}"`,
     );
   }
-  return { load: loadLore(loreDir) };
+  const load = loadLore(loreDir);
+  if (load.schemaTooNew) {
+    // Refuse uniformly, for EVERY lore-reading command (SPEC §17). Only the
+    // schema finding is reported — per-page findings against a future schema
+    // are exactly the spurious noise the refusal exists to suppress.
+    const findings = load.findings.filter((f) => f.code === "SCHEMA_VERSION");
+    return findingsResult(findings, flags, true, color);
+  }
+  return { load };
 }
 
 function findingsResult(
@@ -194,7 +202,7 @@ export function run(
       const tool = positional[1];
       if (tool === undefined)
         return usageError("usage: loredown install <claude-code|codex|cursor>");
-      const located = requireLore(cwd, flags);
+      const located = requireLore(cwd, flags, opts.color === true);
       if ("code" in located) return located;
       const root = dirname(located.load.loreDir);
       const result = installAdapter(root, tool, flags.dryRun);
@@ -216,7 +224,7 @@ export function run(
       if (kind === undefined || slug === undefined) {
         return usageError("usage: loredown new <kind> <slug>");
       }
-      const located = requireLore(cwd, flags);
+      const located = requireLore(cwd, flags, opts.color === true);
       if ("code" in located) return located;
       const { load } = located;
       const today = new Date().toISOString().slice(0, 10);
@@ -238,7 +246,7 @@ export function run(
     }
 
     case "lint": {
-      const located = requireLore(cwd, flags);
+      const located = requireLore(cwd, flags, opts.color === true);
       if ("code" in located) return located;
       const { load } = located;
       const findings = lintLore(load);
@@ -250,11 +258,9 @@ export function run(
     }
 
     case "index": {
-      const located = requireLore(cwd, flags);
+      const located = requireLore(cwd, flags, opts.color === true);
       if ("code" in located) return located;
       const { load } = located;
-      if (load.schemaTooNew)
-        return findingsResult(load.findings, flags, false, opts.color === true);
       const fresh = generateIndex(load.config, load.pages);
       const indexPath = join(load.loreDir, "index.md");
       const current = existsSync(indexPath) ? readFileSync(indexPath, "utf8") : null;
@@ -287,7 +293,7 @@ export function run(
     }
 
     case "drift": {
-      const located = requireLore(cwd, flags);
+      const located = requireLore(cwd, flags, opts.color === true);
       if ("code" in located) return located;
       const { findings, skipped } = driftLore(located.load, cwd);
       if (flags.json) {
@@ -317,7 +323,7 @@ export function run(
       const targets = positional.slice(1);
       if (targets.length === 0)
         return usageError("usage: loredown import <file-or-dir…> --kind <kind>");
-      const located = requireLore(cwd, flags);
+      const located = requireLore(cwd, flags, opts.color === true);
       if ("code" in located) return located;
       const { load } = located;
       if (flags.kind === undefined) {
@@ -353,7 +359,7 @@ export function run(
     case "trace": {
       const id = positional[1];
       if (id === undefined) return usageError("usage: loredown trace <page-id>");
-      const located = requireLore(cwd, flags);
+      const located = requireLore(cwd, flags, opts.color === true);
       if ("code" in located) return located;
       const report = tracePage(located.load, id, cwd);
       if (report === null) return usageError(`no page with id "${id}"`);
