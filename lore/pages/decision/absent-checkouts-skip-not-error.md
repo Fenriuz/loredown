@@ -11,7 +11,8 @@ provenance:
   task: "v0.2.0 field report"
 sources:
   - path: SPEC.md
-    sha: "170c129"
+    sha: "1f3730e"
+    section: "## 9. Drift and verification"
     note: §9 sibling-repos design
 ---
 

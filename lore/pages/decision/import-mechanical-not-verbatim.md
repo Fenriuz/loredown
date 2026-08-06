@@ -11,7 +11,8 @@ provenance:
   task: "v0.3.0 field report"
 sources:
   - path: SPEC.md
-    sha: "170c129"
+    sha: "1f3730e"
+    section: "### Import contract"
     note: §14 import contract
 ---
 

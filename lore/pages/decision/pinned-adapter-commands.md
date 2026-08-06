@@ -11,7 +11,8 @@ provenance:
   task: "v0.4.0 field report"
 sources:
   - path: SPEC.md
-    sha: "170c129"
+    sha: "1f3730e"
+    section: "## 12. Entry point and adapters"
     note: §12 pinning rationale
 ---
 
