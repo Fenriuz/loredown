@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -50,5 +50,48 @@ describe("uniform schema refusal (SPEC §17)", () => {
     const dir = mkdtempSync(join(tmpdir(), "loredown-schema-ok-"));
     initLore(dir, false, "2026-08");
     expect(run(["lint"], dir).code).toBe(0);
+  });
+});
+
+describe("the section: schema gate (SPEC §3, §17)", () => {
+  const page = (source: string) =>
+    `---\nid: gotcha/g\ntitle: Gated\nkind: gotcha\nstatus: active\ncreated: 2026-08-01\nupdated: 2026-08-01\nprovenance:\n  agent: human\n  actor: test\n  task: T-1\nsources:\n${source}---\n\nBody.\n`;
+
+  function loreWith(source: string, schemaVersion: 1 | 2): string {
+    const dir = mkdtempSync(join(tmpdir(), "loredown-gate-"));
+    initLore(dir, false, "2026-08");
+    if (schemaVersion === 2) {
+      writeFileSync(
+        join(dir, "lore/config.yaml"),
+        "schema_version: 2\nbudgets:\n  page_body_lines: 40\n  pages_per_task: 3\nscan:\n  instructions: warn\n  secrets: error\nkinds: []\n",
+      );
+    }
+    const pageDir = join(dir, "lore/pages/gotcha");
+    mkdirSync(pageDir, { recursive: true });
+    writeFileSync(join(pageDir, "g.md"), page(source));
+    return dir;
+  }
+
+  const SECTIONED = '  - path: docs/x.md\n    sha: abc1234\n    section: "## Billing"\n';
+
+  it("section: on a schema-1 lore fails with a pointed, guiding error", () => {
+    const result = run(["lint"], loreWith(SECTIONED, 1));
+    expect(result.code).toBe(1);
+    expect(result.stdout).toContain("requires schema_version: 2");
+    expect(result.stdout).toContain("loredown >= 0.6");
+  });
+
+  it("section: on a schema-2 lore parses", () => {
+    const result = run(["lint"], loreWith(SECTIONED, 2));
+    expect(result.stdout).not.toContain("requires schema_version");
+  });
+
+  it("a section value that is not a heading line is rejected", () => {
+    const result = run(
+      ["lint"],
+      loreWith('  - path: docs/x.md\n    sha: abc1234\n    section: "Billing"\n', 2),
+    );
+    expect(result.code).toBe(1);
+    expect(result.stdout).toContain("expected the quoted heading line");
   });
 });

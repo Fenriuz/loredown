@@ -48,3 +48,23 @@ export function commitsTouchingSince(cwd: string, sha: string, path: string): nu
   const trimmed = result.stdout.trim();
   return trimmed === "" ? 0 : trimmed.split("\n").length;
 }
+
+/** The ls-tree entry ("<mode> <type> <oid>") for a path at a rev, or null when absent. */
+export function treeEntry(cwd: string, rev: string, path: string): string | null {
+  const result = git(cwd, ["ls-tree", rev, "--", path.replace(/\/+$/, "")]);
+  if (!result.ok) return null;
+  const line = result.stdout.split("\n", 1)[0] ?? "";
+  if (line === "") return null;
+  const tab = line.indexOf("\t");
+  return tab === -1 ? line : line.slice(0, tab);
+}
+
+/**
+ * Blob content at `rev:path`, or null when absent or not a blob. Always
+ * `cat-file blob`, never `git show` — show applies textconv/diff drivers from
+ * local git configuration, which would make verdicts machine-dependent (SPEC §9).
+ */
+export function blobAt(cwd: string, rev: string, path: string): string | null {
+  const result = git(cwd, ["cat-file", "blob", `${rev}:${path.replace(/\/+$/, "")}`]);
+  return result.ok ? result.stdout : null;
+}

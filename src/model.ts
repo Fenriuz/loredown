@@ -29,7 +29,12 @@ export interface PathSource {
   note?: string;
   /** Name of a sibling checkout declared in config.repos (SPEC §9). */
   repo?: string;
+  /** Exact heading line of the cited region — schema 2 (SPEC §3, §9), e.g. `## Billing`. */
+  section?: string;
 }
+
+/** A section anchor value must look like a markdown heading line (SPEC §3). */
+export const SECTION_HEADING = /^#{1,6} \S/;
 
 export interface UrlSource {
   url: string;
@@ -89,7 +94,7 @@ export const DEFAULT_CONFIG: Config = {
 };
 
 /** The newest schema this build of the CLI understands (SPEC §17). */
-export const KNOWN_SCHEMA_VERSION = 1;
+export const KNOWN_SCHEMA_VERSION = 2;
 
 export const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 export const SHORT_SHA = /^[0-9a-f]{7,40}$/;

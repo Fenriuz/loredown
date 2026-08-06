@@ -12,6 +12,7 @@ import {
   type Config,
   DEFAULT_CONFIG,
   ISO_DATE,
+  SECTION_HEADING,
   KNOWN_SCHEMA_VERSION,
   type Page,
   type PathSource,
@@ -254,7 +255,11 @@ const PAGE_KEYS = [
   "imported",
 ] as const;
 
-function validateSources(ctx: FieldContext, value: YamlValue | undefined): Source[] | null {
+function validateSources(
+  ctx: FieldContext,
+  value: YamlValue | undefined,
+  schemaVersion: number,
+): Source[] | null {
   if (value === undefined) {
     err(ctx, "FM_FIELD", "sources: required field is missing (every page needs ≥ 1 source)");
     return null;
@@ -273,7 +278,7 @@ function validateSources(ctx: FieldContext, value: YamlValue | undefined): Sourc
       return;
     }
     if (item.path !== undefined) {
-      checkUnknownKeys(ctx, "FM_FIELD", item, ["path", "sha", "note", "repo"], where);
+      checkUnknownKeys(ctx, "FM_FIELD", item, ["path", "sha", "note", "repo", "section"], where);
       const path = takeString(ctx, "FM_FIELD", item, "path", where);
       const sha = takeString(ctx, "FM_FIELD", item, "sha", where);
       if (path === null || sha === null) {
@@ -297,9 +302,31 @@ function validateSources(ctx: FieldContext, value: YamlValue | undefined): Sourc
         ok = false;
         return;
       }
+      const section = item.section;
+      if (section !== undefined) {
+        if (typeof section !== "string" || !SECTION_HEADING.test(section)) {
+          err(
+            ctx,
+            "FM_FIELD",
+            `${where}section: expected the quoted heading line the claim cites, e.g. section: "## Billing"`,
+          );
+          ok = false;
+          return;
+        }
+        if (schemaVersion < 2) {
+          err(
+            ctx,
+            "FM_FIELD",
+            `${where}section: requires schema_version: 2 — set it in lore/config.yaml once every consumer (CI, adapters) runs loredown >= 0.6`,
+          );
+          ok = false;
+          return;
+        }
+      }
       const source: PathSource = { path, sha };
       if (note !== undefined) source.note = note as string;
       if (repo !== undefined) source.repo = repo as string;
+      if (section !== undefined) source.section = section as string;
       sources.push(source);
       return;
     }
@@ -329,6 +356,7 @@ function validatePage(
   relFile: string,
   displayFile: string,
   text: string,
+  schemaVersion: number,
 ): {
   page: Page | null;
   findings: Finding[];
@@ -385,7 +413,7 @@ function validatePage(
     if (agent !== null && actor !== null && task !== null) provenance = { agent, actor, task };
   }
 
-  const sources = validateSources(ctx, fm.sources);
+  const sources = validateSources(ctx, fm.sources, schemaVersion);
 
   let supersedes: string | undefined;
   const supValue = fm.supersedes;
@@ -464,7 +492,7 @@ export function loadLore(loreDir: string): LoadResult {
     const displayFile = display(loreDir, relFile);
     const text = readFileSync(join(pagesDir, rel), "utf8");
     rawPages.push({ file: relFile, display: displayFile, text });
-    const result = validatePage(relFile, displayFile, text);
+    const result = validatePage(relFile, displayFile, text, config.schemaVersion);
     findings.push(...result.findings);
     if (result.page !== null) pages.push(result.page);
   }
