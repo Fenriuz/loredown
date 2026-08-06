@@ -26,8 +26,16 @@ git add -A
 git commit -qm "checkout: initial retry policy"
 SHA="$(git rev-parse --short HEAD)"
 
+# Install THIS checkout's build, not whatever the registry is serving. The GIF
+# is an asset of this repo and has to demonstrate this repo's code: recording
+# against the registry silently films the last release instead, which is how a
+# demo ends up showing behavior the source no longer has (or, as here, missing
+# behavior the source already has). Also means recording needs no network.
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+( cd "$REPO_ROOT" && npm run build >/dev/null 2>&1 )
+
 npm init -y >/dev/null 2>&1
-npm i -D loredown --silent >/dev/null 2>&1
+npm i -D "$REPO_ROOT" --silent >/dev/null 2>&1
 npx loredown init >/dev/null
 
 # Keep every body line at 62 characters or less: the tape films this page in a
