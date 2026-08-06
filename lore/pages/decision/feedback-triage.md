@@ -4,7 +4,7 @@ title: Feedback is triaged by a fixed rubric, kept in lore not CONTRIBUTING
 kind: decision
 status: active
 created: 2026-08-05
-updated: 2026-08-05
+updated: 2026-08-06
 provenance:
   agent: claude-code
   actor: fenriuz
@@ -12,18 +12,23 @@ provenance:
 sources:
   - path: CHANGELOG.md
     sha: "5efc4a1"
-    note: the three field-report cycles that shaped the rubric
+    note: the field-report cycles that shaped the rubric
 ---
 
 ## Context
-Three field reports in three days each produced a release. The feedback was
+Four field reports in four days drove five releases. The feedback was
 excellent, but the filter deciding what to build was implicit — and all field
-evidence so far comes from one team and one corpus.
+evidence so far comes from one team and one corpus (a channel that closed in
+2026-08 when the reporter moved on; new evidence must come from new corpora).
 
 ## Decision
 Every report or feature request is triaged with fixed questions, in order:
-1. Reproduce the claim before adopting anything (each of the three reports
-   contained an error or design gap the repro caught).
+1. Reproduce the claim before adopting anything. Every report contained an
+   error or design gap the repro caught — including, in the fourth, a console
+   transcript written from code-reading and presented as observed output
+   (wrong error code; the reporter later confirmed the session never existed).
+   Good-faith fabrication by competent reporters is the default failure mode
+   of LLM-era reports: plausible output written from belief, not observation.
 2. Does the problem violate a loredown principle (determinism, never-guess,
    curation-first, supply-chain)? Fix loredown, with priority.
 3. Is it a legitimate user practice we fail to support (umbrella repos,
