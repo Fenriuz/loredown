@@ -86,7 +86,7 @@ logs before touching the handler.
 | `status` | yes | `active` \| `superseded` \| `archived`. Non-active pages are excluded from the index body and listed in an "archive" tail section. |
 | `created` / `updated` | yes | ISO dates (`YYYY-MM-DD`). `created` never changes; `updated` bumps on any content edit. |
 | `provenance` | yes | `agent` (tool family: `claude-code`, `cursor`, `codex`, `human`, …), `actor` (accountable human — normally the PR author), `task` (PR, ticket, or branch that produced the knowledge). |
-| `sources` | yes, ≥ 1 | Evidence anchors. Path sources: repo-relative `path` + short `sha` of HEAD at verification time + optional `note` + optional `repo` naming a sibling checkout declared in `config.repos` (§9). URL sources: `url` + `accessed` date. |
+| `sources` | yes, ≥ 1 | Evidence anchors. Path sources: repo-relative `path` + short `sha` of HEAD at verification time + optional `note` + optional `repo` naming a sibling checkout declared in `config.repos` (§9) + optional `section` — the exact markdown heading line the claim cites, **always quoted** (`section: "## Billing"`; unquoted, the ` #` starts a YAML comment and the page fails to parse). `section:` requires `schema_version: 2` (§17). URL sources: `url` + `accessed` date. |
 | `supersedes` | no | Id of an older page; lint requires the target to exist with `status: superseded`. |
 | `imported` | no | `true` marks a page imported from a pre-existing KB and pending curation (§8, §14 `import`). Lint downgrades the hard body-budget error to a warning and emits an `IMPORTED` warning until the field is removed. |
 
@@ -182,7 +182,37 @@ Pages decay because the code moves under them. The drift model makes that visibl
 - `loredown drift` checks every path source of every active page:
   - path missing from the tree **and** from disk → **error `SRC_GONE`** (the page's evidence is gone);
   - path missing from the tree but **present on disk** → **error `SRC_UNTRACKED`** (nested repo or ignored path — declare a `repos:` mapping or fix the anchor). These are different facts and get different diagnostics;
-  - `git log <sha>..HEAD -- <path>` is non-empty → **warning `SRC_STALE`**: "page may be stale — N commits touched its source since verification".
+  - the tree entry (`git ls-tree`: mode, type, object id) for the path is **identical** at
+    `<sha>` and `HEAD` → **no finding**, regardless of intervening commits — content-identical
+    is not stale (reverts, merges, touch-only history). Entries, not blob ids: a mode flip or
+    typechange with identical bytes is still a change;
+  - entries differ but `git log <sha>..HEAD -- <path>` is empty → **warning `SRC_STALE`**
+    ("content differs but no commits connect the anchor to HEAD — is the anchor on this
+    lineage?");
+  - `git log <sha>..HEAD -- <path>` is non-empty → **warning `SRC_STALE`**: "page may be
+    stale — N commits touched its source since verification" — unless a `section` anchor
+    narrows the verdict (below).
+- **Section anchors (schema 2, §17).** A path source may carry `section: "## Heading"` — the
+  exact heading line of the region the claim cites. Drift then compares only that region
+  between the anchored sha and `HEAD`:
+  - the heading is the first line whose normalized form (one trailing `\r` stripped, then
+    right-trimmed) equals the `section` value; the region runs through the line before the
+    next heading whose `#`-count is **≤** the anchor heading's `#`-count, or EOF. Region
+    content is compared with only `\r` stripped per line — trailing whitespace inside the
+    region is significant (a markdown hard break is content), so a pure CRLF↔LF change reads
+    as `SRC_STALE`, the safe direction;
+  - region identical → **no finding**; region differs → **warning `SRC_STALE`** naming the
+    section;
+  - heading not found at `HEAD` → **warning `SRC_SECTION`** (renamed or removed — re-verify);
+  - heading not found at the **anchored sha** — or the file itself absent there → **error
+    `SRC_SECTION`** (the anchor never matched; fix it). This is checked *before* the
+    fast path, so a broken section anchor can never hide behind an unchanged file;
+  - heading occurring more than once at either rev → **warning `SRC_SECTION`** (ambiguous —
+    cite a unique heading). Matching is line-based, the same documented limitation as the
+    split-seam hints: a fenced code block can fake a heading;
+  - file content at a rev is read with `git cat-file blob`, never `git show` — `show` applies
+    textconv and diff drivers from local git configuration, which would make drift verdicts
+    machine-dependent.
 - **Sibling repos (the umbrella/docs-repo pattern).** Knowledge repos often document code that lives in *other* git repos (handbook repos, umbrella repos over independently-deployed modules). Nested checkouts appear in the parent tree only as gitlinks, which `git cat-file` cannot resolve through. `config.repos` maps a repo name to a local checkout (relative path only — mappings must travel with clones); a path source carrying `repo: <name>` is verified by running the same two git queries inside that checkout. When the checkout is **absent** (CI, fresh clone), those sources are **skipped and reported, never findings** — "not verifiable here" is a different fact from "the evidence is gone", and must not fail a pipeline. A `repo:` name not declared in config is a lint **error** (`SRC_REPO`).
 - Re-verification is a judgment call, not a mechanical one: an agent or human re-reads the page against the current source, fixes or confirms it, updates the `sha`s and `updated`. `drift` never auto-updates anchors — that would silently convert "stale" into "falsely fresh".
 - URL sources: when `budgets.url_accessed_max_age_days` is set (> 0), `drift` warns (`URL_STALE`) on active pages whose `accessed` date is older than the horizon — an offline nudge to re-check external evidence. Default 0 (off). No network I/O is ever performed.
@@ -341,7 +371,7 @@ appear.
 ## 15. Config reference (`lore/config.yaml`)
 
 ```yaml
-schema_version: 1        # migrations bump this; CLI refuses newer-than-known
+schema_version: 1        # 2 enables section: anchors (§17); CLI refuses newer-than-known
 budgets:
   page_body_lines: 40
   pages_per_task: 3
@@ -366,7 +396,26 @@ Config is data only. **No config key will ever name an executable or shell comma
 
 ## 17. Schema versioning
 
-`schema_version` in config gates behavior: the CLI migrates forward (`loredown migrate`, post-v0.1) and refuses to operate on versions newer than it knows. Frontmatter changes within a major schema version are additive-only.
+`schema_version` in `lore/config.yaml` declares the newest schema feature the lore uses. The
+CLI refuses to operate — uniformly, for **every** lore-reading command — on versions newer
+than it knows, with a single `SCHEMA_VERSION` error and exit 1. Within a version, frontmatter
+changes are additive-only.
+
+| Version | Adds | Reader |
+|---|---|---|
+| 1 | The v0.1 page format | any loredown |
+| 2 | `section:` on path sources (§3, §9) | loredown ≥ 0.6 |
+
+`init` still writes `schema_version: 1`: a fresh lore stays readable by every CLI version, and
+nothing about version 2 is mandatory. Declaring `2` is a one-line config edit, required before
+the first `section:` anchor lands — lint enforces it with a pointed error.
+
+**Upgrade order matters.** loredown ≤ 0.5 predates the uniform refusal: its `lint` and `index`
+fail loudly on a version-2 lore, but its `drift` drops the unreadable pages and reports
+**clean** (exit 0), and its `trace` claims the page does not exist. Before declaring version 2,
+pin CI to loredown ≥ 0.6 and re-run `loredown install <tool>` so the pinned adapter commands
+(§12) move past 0.5. There is no migration command — adopting version 2 is one config line
+plus optional `section:` fields, added page by page as claims are re-verified.
 
 ## 18. Testing strategy (how this spec is enforced)
 
