@@ -444,8 +444,8 @@ export function importPages(
     originPath: string | null,
   ): { body: string; changed: boolean } => {
     let changed = false;
-    const out = body.replace(WIKILINK, (full: string, inner: string) => {
-      const { target, heading, alias } = splitWikiLink(inner);
+    const out = body.replace(WIKILINK, (full: string, inner: string, offset: number) => {
+      const { target, heading, alias, escapedPipe } = splitWikiLink(inner);
       if (target === "") {
         if (heading === null) linksLeft++; // degenerate `[[|x]]` — lint will flag it
         return full; // same-page anchors are not page links
@@ -483,8 +483,13 @@ export function importPages(
       linksRewritten++;
       changed = true;
       const suffix = heading === null ? "" : `#${heading}`;
-      // The rendered text is information: keep the alias, or the original target text.
-      return `[[${id}${suffix}|${alias ?? `${target}${suffix}`}]]`;
+      // Rendered text AND structure are information: keep the alias and its escape
+      // style; a synthesized alias landing in a table row must be written escaped
+      // or the new `|` splits the cell (SPEC §14).
+      const lineStart = body.lastIndexOf("\n", offset - 1) + 1;
+      const inTableRow = body.slice(lineStart, offset).trimStart().startsWith("|");
+      const sep = (alias !== null ? escapedPipe : inTableRow) ? "\\|" : "|";
+      return `[[${id}${suffix}${sep}${alias ?? `${target}${suffix}`}]]`;
     });
     return { body: out, changed };
   };

@@ -76,7 +76,11 @@ runs resolve the links earlier runs could not.
 
 The safe order: **import → re-anchor pages to code → delete the old KB.** Imported pages are
 anchored to their original files; delete those first and every uncurated page flips to
-`SRC_GONE` at once.
+`SRC_GONE` at once. The same applies to **moving or copying the lore** into another repo —
+provenance anchors only verify where they were born, so re-anchor to `repo:` sources before
+the lore travels. `repo:` anchors degrade smoothly at the destination: without the mapped
+checkouts they are reported as skips (exit 0) and start verifying the moment the checkouts
+appear — a first run showing "88 skipped" means *point me at the code*, not failure.
 
 ## The idea
 

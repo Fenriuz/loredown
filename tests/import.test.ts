@@ -334,6 +334,28 @@ describe("loredown import", () => {
     expect(broken.length).toBe(2); // [[missing]] + [[decision/ghost]]; [[#Anchor]] is free
   });
 
+  it("escaped alias separators: table cells parse, resolve, and never lose their escape", () => {
+    const dir = makeRepo({
+      "docs/target.md": "# Target\n\nBody.\n",
+      "docs/intro.md": "# Intro\n\n## Setup\n\nText.\n",
+      "docs/table.md":
+        "# Table\n\n| Q | Detail |\n|---|---|\n| A1 | Ver [[map/target\\|target]] |\n| A2 | Ver [[target\\|alias]] |\n| A3 | Ver [[target]] |\n| A4 | Ver [[intro#Setup\\|the setup]] |\n\nOutside: [[target|plain]] here.\n",
+    });
+    const result = run(["import", "docs", "--kind", "map"], dir);
+    expect(result.code, result.stderr).toBe(0);
+    expect(result.stdout).toContain("4 wiki-links rewritten, 0 left for review");
+    const table = readFileSync(join(dir, "lore/pages/map/table.md"), "utf8");
+    expect(table).toContain("| A1 | Ver [[map/target\\|target]] |"); // id-form — untouched, still escaped
+    expect(table).toContain("| A2 | Ver [[map/target\\|alias]] |"); // rewritten, escape preserved
+    expect(table).toContain("| A3 | Ver [[map/target\\|target]] |"); // synthesized alias — escaped, cell intact
+    expect(table).toContain("| A4 | Ver [[map/intro#Setup\\|the setup]] |"); // composes with heading
+    expect(table).toContain("Outside: [[map/target|plain]] here."); // plain form outside tables
+    run(["index", "--lore", join(dir, "lore")], dir);
+    expect(lintLore(loadLore(join(dir, "lore"))).filter((f) => f.code === "LINK_BROKEN")).toEqual(
+      [],
+    );
+  });
+
   it("lint validates only the target of aliased wiki-links", () => {
     const dir = makeWikiRepo();
     mkdirSync(join(dir, "lore/pages/decision"), { recursive: true });

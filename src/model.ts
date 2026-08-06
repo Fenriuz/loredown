@@ -99,18 +99,25 @@ export const TITLE_MAX = 80;
 /** Wiki-link syntax (SPEC §3): `[[target]]` or `[[target|display text]]`. */
 export const WIKILINK = /\[\[([^\]\n]+)\]\]/g;
 
-/** Split a wiki-link's inner text per the grammar `target(#heading)?(|display)?` (SPEC §3). */
+/**
+ * Split a wiki-link's inner text per the grammar `target(#heading)?(|display)?` (SPEC §3).
+ * The alias separator may be written escaped (`\|`) — the table-cell form; the backslash
+ * belongs to neither the target nor the display.
+ */
 export function splitWikiLink(inner: string): {
   target: string;
   heading: string | null;
   alias: string | null;
+  /** True when the alias separator was written `\|` (markdown table cells). */
+  escapedPipe: boolean;
 } {
   const pipe = inner.indexOf("|");
+  const escapedPipe = pipe > 0 && inner[pipe - 1] === "\\";
   const alias = pipe === -1 ? null : inner.slice(pipe + 1);
-  const full = pipe === -1 ? inner : inner.slice(0, pipe);
+  const full = pipe === -1 ? inner : inner.slice(0, escapedPipe ? pipe - 1 : pipe);
   const hash = full.indexOf("#");
-  if (hash === -1) return { target: full, heading: null, alias };
-  return { target: full.slice(0, hash), heading: full.slice(hash + 1), alias };
+  if (hash === -1) return { target: full, heading: null, alias, escapedPipe };
+  return { target: full.slice(0, hash), heading: full.slice(hash + 1), alias, escapedPipe };
 }
 
 export function isBuiltinKind(kind: string): kind is BuiltinKind {

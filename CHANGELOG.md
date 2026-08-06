@@ -4,6 +4,36 @@ All notable changes to loredown are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and the project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.5.0] — 2026-08-06
+
+Driven by the fourth field report — the same team's migration done for real and
+delivered: 27 wiki pages became 39 curated lore pages with 88 cross-repo
+anchors, handed over as a standalone folder. The handoff and the curation each
+surfaced one gap.
+
+### Added
+
+- **Escaped alias separators** — `[[target\|display]]`, the only way to write
+  an aliased wiki-link inside a markdown table cell, now parses everywhere the
+  plain form does: lint resolves it, import rewrites it, and the escape is
+  never lost. Rewrites preserve rendered *structure* as well as text: an
+  escaped separator stays escaped, and an alias synthesized into a table row
+  is written escaped — previously a bare link in a table cell was rewritten
+  with an unescaped `|` that silently split the cell while lint stayed green.
+- **The provenance anchor is a specified concept** (SPEC §14): the first
+  source of an imported page records where the page came from, not what it
+  asserts. Import's link resolution already relied on it; now it has a name
+  and a contract.
+
+### Changed
+
+- Migration docs (SPEC §14, README) now cover **extraction**: the
+  `SRC_SHA`/`SRC_GONE` cascade fires not only when the old KB is deleted but
+  when the lore moves without its repo — copied, split out of a monorepo, or
+  handed over as a folder. Re-anchor to `repo:` sources before the lore
+  travels; `repo:` anchors skip (exit 0) at a destination without the mapped
+  checkouts and start verifying when they appear.
+
 ## [0.4.1] — 2026-08-05
 
 Positioning and documentation only — no code changes, no behavior changes. The
