@@ -5,7 +5,7 @@ _13 active pages · schema v1_
 ## Decisions
 - [[decision/absent-checkouts-skip-not-error]] — Drift treats absent sibling checkouts as skips, never findings (2026-08-05)
 - [[decision/feedback-triage]] — Feedback is triaged by a fixed rubric, kept in lore not CONTRIBUTING (2026-08-05)
-- [[decision/import-mechanical-not-verbatim]] — Import is mechanical and lossless, not verbatim (2026-08-05)
+- [[decision/import-mechanical-not-verbatim]] — Import is mechanical and lossless, not verbatim (2026-08-06)
 - [[decision/in-repo-markdown-over-memory-stores]] — The KB is markdown in the repo, not an external memory store (2026-07-14)
 - [[decision/name-loredown]] — The project is named loredown (2026-07-14)
 - [[decision/pinned-adapter-commands]] — Adapter-written commands are pinned to the installing version (2026-08-05)

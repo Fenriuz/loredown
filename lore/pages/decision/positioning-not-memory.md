@@ -11,7 +11,7 @@ provenance:
   task: "v0.4.1 positioning"
 sources:
   - path: README.md
-    sha: "5641b7b"
+    sha: "5efc4a1"
     note: hook and above-the-fold claims
 ---
 

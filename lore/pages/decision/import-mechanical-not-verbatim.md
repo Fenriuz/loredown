@@ -4,14 +4,14 @@ title: Import is mechanical and lossless, not verbatim
 kind: decision
 status: active
 created: 2026-08-05
-updated: 2026-08-05
+updated: 2026-08-06
 provenance:
   agent: claude-code
   actor: fenriuz
   task: "v0.3.0 field report"
 sources:
   - path: SPEC.md
-    sha: "33f69b4"
+    sha: "5efc4a1"
     note: §14 import contract
 ---
 
@@ -28,8 +28,11 @@ unadopted metadata stays visible, and a harvested anchor must verify in its
 target repo — never born SRC_GONE, the same philosophy as
 [[decision/absent-checkouts-skip-not-error]]. A path-style link naming a file
 skipped this run is left broken rather than re-pointed by name — mis-anchoring
-is worse than a broken link. And the summary's left-for-review count equals
-what lint will flag: the summary predicts the lint.
+is worse than a broken link. The summary's left-for-review count equals
+what lint will flag: the summary predicts the lint. And rendered *structure*
+is information too: alias-separator escapes survive rewriting, and an alias
+synthesized into a table row is written escaped — a rewrite must never break
+the table around it (the fourth field report caught the silent variant).
 
 ## Why
 One-PR migration is the reason import exists; verbatim copying was the means,
