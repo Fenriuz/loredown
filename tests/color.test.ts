@@ -29,6 +29,7 @@ describe("colored human output", () => {
     const colored = formatHuman(FINDINGS, true);
     expect(colored).toContain("\u001b[31merror\u001b[0m");
     expect(colored).toContain("\u001b[33mwarn\u001b[0m");
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: the escape is under test
     expect(colored.replace(/\u001b\[\d+m/g, "")).toBe(plain);
   });
 
