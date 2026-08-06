@@ -102,7 +102,10 @@ logs before touching the handler.
   link — lint does not validate it, and heading existence is deliberately unchecked: real
   headings carry formatting that text-matching would false-flag, and a false positive trains
   people to ignore lint. Lint validates only the page part of the target and errors on broken
-  targets; heading and display text are free. Path-style targets (`[[../domain/beta]]`) are
+  targets; heading and display text are free. Inside markdown table cells the alias separator
+  is written escaped — `[[decision/beta\|display]]` — because a bare `|` would split the
+  cell; the escaped form is equivalent to the plain one everywhere (the backslash belongs to
+  neither the target nor the display). Path-style targets (`[[../domain/beta]]`) are
   not valid lore links — `import` resolves them to ids (§14); lint flags any that remain.
 
 ## 4. Kinds
@@ -287,7 +290,11 @@ Error output goes to stderr; findings go to stdout (human format or `--json`).
   at HEAD in this repo becomes a plain path anchor. An entry becomes an anchor only when
   the path verifies in the target repo — **an anchor must never be born `SRC_GONE`**.
   Unverifiable entries (absent checkout, unknown path) are kept in the import anchor's
-  `note:`. The anchor to the original file at HEAD is always kept as the provenance trail.
+  `note:`. The anchor to the original file at HEAD is always kept as the page's **first**
+  source: the *provenance anchor*. It is structurally different from the claim anchors that
+  follow it — it records where the page came from, not what the page asserts — and import's
+  own link resolution relies on it (path-style links resolve against it). Curation replaces
+  it with claim anchors before removing `imported: true`.
 - **Link rewriting** — wiki-link targets are resolved against all lore pages plus the
   current batch and rewritten to the id namespace; heading anchors ride along untouched and
   same-page anchors (`[[#H]]`) are not links. A target whose leading segment is a declared
@@ -302,7 +309,10 @@ Error output goes to stderr; findings go to stdout (human format or `--json`).
   than a broken link; (3) otherwise the basename falls back to slug resolution. Exactly one
   match → rewritten with the original rendered text preserved as display
   (`[[Beta Service]]` → `[[glossary/beta-service|Beta Service]]`; an existing alias is
-  kept). Ambiguous and unresolvable targets are left as-is for lint to flag — guessing
+  kept). Rendered *structure* is preserved too: an alias separator that was escaped stays
+  escaped, and an alias synthesized into a table row (a line whose first non-space character
+  is `|`) is written escaped — a rewrite must never break the table that contains it.
+  Ambiguous and unresolvable targets are left as-is for lint to flag — guessing
   would be worse than reporting. After each run the rewrite pass covers **every page still
   marked `imported: true`**, not just the batch: a KB imported in several `--kind` runs
   converges, because later runs resolve the forward links earlier runs could not.
@@ -311,7 +321,13 @@ Error output goes to stderr; findings go to stdout (human format or `--json`).
 
 **Migration order**: import → re-anchor pages to code (`repo:` sources) → only then delete
 the old KB directory. Imported pages are anchored to their original files; deleting those
-files first flips every uncurated page to `SRC_GONE` at once.
+files first flips every uncurated page to `SRC_GONE` at once. The same cascade fires when
+the lore **moves without its repo** — copied into another repository, split out of a
+monorepo, handed over as a folder: provenance anchors and their shas only verify where they
+were born, so the destination sees `SRC_SHA`/`SRC_GONE` on arrival. Re-anchor before the
+lore travels. `repo:` anchors are the portable form — at a destination without the mapped
+checkouts they *skip*, they never fail (§9), and start verifying the moment the checkouts
+appear.
 
 ## 15. Config reference (`lore/config.yaml`)
 
