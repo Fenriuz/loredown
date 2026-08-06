@@ -4,11 +4,19 @@
 [![CI](https://github.com/Fenriuz/loredown/actions/workflows/ci.yml/badge.svg)](https://github.com/Fenriuz/loredown/actions)
 [![license](https://img.shields.io/npm/l/loredown)](LICENSE)
 
-**Your repo's institutional memory — a team knowledge base maintained by AI coding agents, versioned in git.**
+**Your agents keep re-learning your codebase. Make them write it down — reviewed like code, checked for staleness.**
 
-Decisions and their *why*, failed approaches, external constraints, gotchas — the knowledge git can't tell you, kept next to the code that needs it. Agents write it, humans review it in ordinary pull requests, and a deterministic CLI validates it.
+A team knowledge base kept as markdown in your repo: decisions and their *why*, failed approaches, external constraints, gotchas — the knowledge git can't tell you, next to the code that needs it. Your AI coding agents write it, your team approves it in ordinary pull requests, and the CLI flags it when it goes stale.
 
-<!-- demo: docs/demo.gif — generate with `vhs docs/demo.tape` once the repo is public -->
+<!-- demo: docs/demo.gif — generate with `vhs docs/demo.tape` -->
+
+- **Only what the code can't tell you.** A derivability rule keeps the base small enough to load on every task — decisions and their why, never how the code works.
+- **Review is a pull request.** Your reviewers, your CODEOWNERS, your identities. No new tool, no hosted service, no vendor lock-in.
+- **It detects its own staleness.** Pages anchor their claims to files and commits; `loredown drift` flags the ones whose sources moved.
+
+Zero runtime dependencies · no network I/O · Claude Code · Cursor · Codex · MIT
+
+Want to see one in use? Read [this repo's own institutional memory](lore/index.md) — every page in `lore/` was written by an agent, reviewed in a pull request, and is re-validated by CI on every test run.
 
 ## Why
 

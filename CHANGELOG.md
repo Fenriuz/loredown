@@ -4,6 +4,22 @@ All notable changes to loredown are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and the project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.4.1] — 2026-08-05
+
+Positioning and documentation only — no code changes, no behavior changes. The
+adapter pin moves with the version, so blocks written by this release read
+`npx loredown@0.4.1`; existing installs are untouched until someone re-runs
+`install`.
+
+### Changed
+
+- README top-of-fold and the package description now lead with the problem
+  (agents re-learning the codebase on every task) and the two properties that
+  distinguish loredown from vendor memory: review rides pull requests, and the
+  tool detects its own staleness.
+- README links `lore/` directly. This repo's own knowledge base is the clearest
+  demonstration of the format, and it was previously invisible to readers.
+
 ## [0.4.0] — 2026-08-05
 
 Driven by the third field report — the same team's 27-page migration re-run on

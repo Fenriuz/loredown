@@ -1,7 +1,7 @@
 {
   "name": "loredown",
-  "version": "0.4.0",
-  "description": "Your repo's institutional memory — a team knowledge base maintained by AI coding agents, versioned in git.",
+  "version": "0.4.1",
+  "description": "Agent-written team knowledge as markdown in your repo — reviewed in pull requests, checked for staleness. Claude Code · Cursor · Codex.",
   "keywords": [
     "knowledge-base",
     "ai-agents",
