@@ -6,9 +6,9 @@
 
 **Your agents keep re-learning your codebase. Make them write it down — reviewed like code, checked for staleness.**
 
-A team knowledge base kept as markdown in your repo: decisions and their *why*, failed approaches, external constraints, gotchas — the knowledge git can't tell you, next to the code that needs it. Your AI coding agents write it, your team approves it in ordinary pull requests, and the CLI flags it when it goes stale.
+![A lore page an agent wrote, the code beneath it changing, and loredown drift catching the page before anyone trusts it](https://raw.githubusercontent.com/Fenriuz/loredown/main/docs/demo.gif)
 
-<!-- demo: docs/demo.gif — generate with `vhs docs/demo.tape` -->
+A team knowledge base kept as markdown in your repo: decisions and their *why*, failed approaches, external constraints, gotchas — the knowledge git can't tell you, next to the code that needs it. Your AI coding agents write it, your team approves it in ordinary pull requests, and the CLI flags it when it goes stale.
 
 - **Only what the code can't tell you.** A derivability rule keeps the base small enough to load on every task — decisions and their why, never how the code works.
 - **Review is a pull request.** Your reviewers, your CODEOWNERS, your identities. No new tool, no hosted service, no vendor lock-in.
