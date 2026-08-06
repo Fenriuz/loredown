@@ -1,8 +1,87 @@
 import { existsSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { type Finding, sortFindings } from "./findings.js";
-import { commitsTouchingSince, git, pathExistsAtHead, repoRoot, shaResolvable } from "./git.js";
+import {
+  blobAt,
+  commitsTouchingSince,
+  git,
+  pathExistsAtHead,
+  repoRoot,
+  shaResolvable,
+  treeEntry,
+} from "./git.js";
 import type { LoadResult } from "./load.js";
+import { extractSection } from "./section.js";
+
+/**
+ * The verdict for one path source, shared by `drift` (maps to findings) and
+ * `trace` (maps to display strings) — the two must never disagree about the
+ * same anchor.
+ */
+export type PathSourceStatus =
+  | { kind: "sha-unresolvable" }
+  | { kind: "gone" }
+  | { kind: "untracked" }
+  | { kind: "compare-failed" }
+  | { kind: "clean" }
+  | { kind: "content-equal"; commits: number }
+  | { kind: "diverged" }
+  | { kind: "stale"; commits: number }
+  | { kind: "section-ok"; commits: number }
+  | { kind: "section-changed"; commits: number; section: string }
+  | { kind: "section-missing-head"; section: string }
+  | { kind: "section-missing-anchor"; section: string }
+  | { kind: "section-file-missing-anchor"; section: string }
+  | { kind: "section-ambiguous"; section: string; count: number };
+
+/** Evaluate one path source against the repo at `gitCwd` (SPEC §9 order). */
+export function pathSourceStatus(
+  gitCwd: string,
+  source: { path: string; sha: string; repo?: string; section?: string },
+): PathSourceStatus {
+  if (!shaResolvable(gitCwd, source.sha)) return { kind: "sha-unresolvable" };
+  if (!pathExistsAtHead(gitCwd, source.path)) {
+    return existsSync(join(gitCwd, source.path)) ? { kind: "untracked" } : { kind: "gone" };
+  }
+
+  // Anchor-side section validation comes FIRST: a broken section anchor must
+  // never hide behind an unchanged file (SPEC §9).
+  const section = source.section;
+  let anchorRegion: string | null = null;
+  if (section !== undefined) {
+    const anchorText = blobAt(gitCwd, source.sha, source.path);
+    if (anchorText === null) return { kind: "section-file-missing-anchor", section };
+    const result = extractSection(anchorText, section);
+    if (result.found === "none") return { kind: "section-missing-anchor", section };
+    if (result.found === "many") return { kind: "section-ambiguous", section, count: result.count };
+    anchorRegion = result.content;
+  }
+
+  const commits = commitsTouchingSince(gitCwd, source.sha, source.path);
+  if (commits === null) return { kind: "compare-failed" };
+
+  // Fast path: identical tree entries (mode + type + oid) mean nothing changed,
+  // however many commits touched the path in between (reverts, merges).
+  const anchorEntry = treeEntry(gitCwd, source.sha, source.path);
+  const headEntry = treeEntry(gitCwd, "HEAD", source.path);
+  if (anchorEntry !== null && headEntry !== null && anchorEntry === headEntry) {
+    return commits === 0 ? { kind: "clean" } : { kind: "content-equal", commits };
+  }
+  if (commits === 0) return { kind: "diverged" };
+
+  if (section !== undefined && anchorRegion !== null) {
+    const headText = blobAt(gitCwd, "HEAD", source.path);
+    if (headText !== null) {
+      const result = extractSection(headText, section);
+      if (result.found === "none") return { kind: "section-missing-head", section };
+      if (result.found === "many")
+        return { kind: "section-ambiguous", section, count: result.count };
+      if (result.content === anchorRegion) return { kind: "section-ok", commits };
+      return { kind: "section-changed", commits, section };
+    }
+  }
+  return { kind: "stale", commits };
+}
 
 export interface DriftResult {
   findings: Finding[];
@@ -88,55 +167,104 @@ export function driftLore(load: LoadResult, cwd: string): DriftResult {
   const checkPathSource = (
     gitCwd: string,
     file: string,
-    source: { path: string; sha: string; repo?: string },
+    source: { path: string; sha: string; repo?: string; section?: string },
   ): void => {
     const label = source.repo === undefined ? source.path : `${source.repo}:${source.path}`;
-    if (!shaResolvable(gitCwd, source.sha)) {
-      findings.push({
-        level: "error",
-        code: "SRC_SHA",
-        file,
-        message: `source "${label}": sha ${source.sha} not found in ${
-          source.repo === undefined ? "this repository" : `repo "${source.repo}"`
-        }`,
-      });
-      return;
-    }
-    if (!pathExistsAtHead(gitCwd, source.path)) {
-      if (existsSync(join(gitCwd, source.path))) {
+    const where = source.repo === undefined ? "this repository" : `repo "${source.repo}"`;
+    const status = pathSourceStatus(gitCwd, source);
+    switch (status.kind) {
+      case "clean":
+      case "content-equal":
+      case "section-ok":
+        return;
+      case "sha-unresolvable":
+        findings.push({
+          level: "error",
+          code: "SRC_SHA",
+          file,
+          message: `source "${label}": sha ${source.sha} not found in ${where}`,
+        });
+        return;
+      case "untracked":
         findings.push({
           level: "error",
           code: "SRC_UNTRACKED",
           file,
-          message: `source "${label}" exists on disk but is not tracked in ${
-            source.repo === undefined ? "this repository" : `repo "${source.repo}"`
-          } (nested repo or ignored path) — declare a repos: mapping or fix the anchor`,
+          message: `source "${label}" exists on disk but is not tracked in ${where} (nested repo or ignored path) — declare a repos: mapping or fix the anchor`,
         });
-      } else {
+        return;
+      case "gone":
         findings.push({
           level: "error",
           code: "SRC_GONE",
           file,
           message: `source "${label}" no longer exists at HEAD — the page's evidence is gone`,
         });
-      }
-      return;
-    }
-    const commits = commitsTouchingSince(gitCwd, source.sha, source.path);
-    if (commits === null) {
-      findings.push({
-        level: "error",
-        code: "SRC_SHA",
-        file,
-        message: `source "${label}": git could not compare ${source.sha}..HEAD`,
-      });
-    } else if (commits > 0) {
-      findings.push({
-        level: "warn",
-        code: "SRC_STALE",
-        file,
-        message: `may be stale — ${commits} commit${commits === 1 ? "" : "s"} touched "${label}" since verification (${source.sha}); re-verify and bump the sha`,
-      });
+        return;
+      case "compare-failed":
+        findings.push({
+          level: "error",
+          code: "SRC_SHA",
+          file,
+          message: `source "${label}": git could not compare ${source.sha}..HEAD`,
+        });
+        return;
+      case "diverged":
+        findings.push({
+          level: "warn",
+          code: "SRC_STALE",
+          file,
+          message: `may be stale — "${label}" differs from the anchor but no commits connect ${source.sha} to HEAD — is the anchor on this lineage?`,
+        });
+        return;
+      case "stale":
+        findings.push({
+          level: "warn",
+          code: "SRC_STALE",
+          file,
+          message: `may be stale — ${status.commits} commit${status.commits === 1 ? "" : "s"} touched "${label}" since verification (${source.sha}); re-verify and bump the sha`,
+        });
+        return;
+      case "section-changed":
+        findings.push({
+          level: "warn",
+          code: "SRC_STALE",
+          file,
+          message: `may be stale — section "${status.section}" of "${label}" changed since verification (${source.sha}); re-verify and bump the sha`,
+        });
+        return;
+      case "section-missing-head":
+        findings.push({
+          level: "warn",
+          code: "SRC_SECTION",
+          file,
+          message: `section "${status.section}" no longer found in "${label}" — renamed or removed; re-verify and update the anchor`,
+        });
+        return;
+      case "section-missing-anchor":
+        findings.push({
+          level: "error",
+          code: "SRC_SECTION",
+          file,
+          message: `section "${status.section}" was never present in "${label}" at the anchored sha (${source.sha}) — fix the anchor`,
+        });
+        return;
+      case "section-file-missing-anchor":
+        findings.push({
+          level: "error",
+          code: "SRC_SECTION",
+          file,
+          message: `source "${label}" is not a file at the anchored sha (${source.sha}) — fix the anchor (sha or path)`,
+        });
+        return;
+      case "section-ambiguous":
+        findings.push({
+          level: "warn",
+          code: "SRC_SECTION",
+          file,
+          message: `section "${status.section}" occurs ${status.count} times in "${label}" — ambiguous; cite a unique heading`,
+        });
+        return;
     }
   };
 

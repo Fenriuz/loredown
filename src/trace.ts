@@ -1,8 +1,44 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
+import { pathSourceStatus } from "./drift.js";
 import { byteCompare } from "./findings.js";
-import { commitsTouchingSince, pathExistsAtHead, repoRoot, shaResolvable } from "./git.js";
+import { repoRoot } from "./git.js";
 import type { LoadResult } from "./load.js";
+
+/** Render one PathSourceStatus for the trace report — same verdicts as drift, by construction. */
+function statusLine(status: ReturnType<typeof pathSourceStatus>, sha: string): string {
+  const n = (c: number) => `${c} commit${c === 1 ? "" : "s"}`;
+  switch (status.kind) {
+    case "sha-unresolvable":
+      return `sha ${sha} not found in repository`;
+    case "gone":
+      return "path no longer exists at HEAD";
+    case "untracked":
+      return "on disk but not tracked (nested repo or ignored path)";
+    case "compare-failed":
+      return "drift status unavailable";
+    case "clean":
+      return "verified against current HEAD lineage — no commits since";
+    case "content-equal":
+      return `content unchanged since verification (${n(status.commits)} touched the file)`;
+    case "diverged":
+      return "content differs but no commits connect the anchor to HEAD";
+    case "stale":
+      return `${n(status.commits)} since verification`;
+    case "section-ok":
+      return `section unchanged since verification (${n(status.commits)} touched the file)`;
+    case "section-changed":
+      return "section changed since verification";
+    case "section-missing-head":
+      return "section no longer found — renamed or removed";
+    case "section-missing-anchor":
+      return "section never present at the anchored sha — fix the anchor";
+    case "section-file-missing-anchor":
+      return "not a file at the anchored sha — fix the anchor";
+    case "section-ambiguous":
+      return `section heading occurs ${status.count} times — ambiguous`;
+  }
+}
 
 /** Human-readable provenance report for one page (SPEC §14): the "where did this come from?" command. */
 export function tracePage(load: LoadResult, id: string, cwd: string): string | null {
@@ -40,23 +76,14 @@ export function tracePage(load: LoadResult, id: string, cwd: string): string | n
         }
       }
     }
-    let drift = unverifiable ?? "drift status unavailable (not a git repository)";
-    if (gitCwd !== null) {
-      if (!shaResolvable(gitCwd, source.sha)) drift = `sha ${source.sha} not found in repository`;
-      else if (!pathExistsAtHead(gitCwd, source.path)) drift = "path no longer exists at HEAD";
-      else {
-        const commits = commitsTouchingSince(gitCwd, source.sha, source.path);
-        drift =
-          commits === null
-            ? "drift status unavailable"
-            : commits === 0
-              ? "verified against current HEAD lineage — no commits since"
-              : `${commits} commit${commits === 1 ? "" : "s"} since verification`;
-      }
-    }
+    const drift =
+      gitCwd === null
+        ? (unverifiable ?? "drift status unavailable (not a git repository)")
+        : statusLine(pathSourceStatus(gitCwd, source), source.sha);
     const note = source.note === undefined ? "" : ` (${source.note})`;
+    const section = source.section === undefined ? "" : ` § "${source.section}"`;
     const label = source.repo === undefined ? source.path : `${source.repo}:${source.path}`;
-    lines.push(`  - path ${label} @ ${source.sha}${note} — ${drift}`);
+    lines.push(`  - path ${label}${section} @ ${source.sha}${note} — ${drift}`);
   }
 
   const inbound = load.pages
