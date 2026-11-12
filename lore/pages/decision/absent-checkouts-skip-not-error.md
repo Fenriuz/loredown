@@ -4,14 +4,14 @@ title: Drift treats absent sibling checkouts as skips, never findings
 kind: decision
 status: active
 created: 2026-08-05
-updated: 2026-08-05
+updated: 2026-11-12
 provenance:
   agent: claude-code
   actor: fenriuz
   task: "v0.2.0 field report"
 sources:
   - path: SPEC.md
-    sha: "1f3730e"
+    sha: "f47d56c"
     section: "## 9. Drift and verification"
     note: §9 sibling-repos design
 ---
@@ -23,7 +23,9 @@ and `drift` exits 1 on any finding.
 
 ## Decision
 An absent checkout produces a reported *skip* (counted, printed, in `--json`),
-never an error or warning finding.
+never an error or warning finding. The skip is for a directory that is
+*absent*: one that exists but is not a checkout is an error (`SRC_REPO`), never
+a skip — see [[gotcha/bare-layout-obeys-tracked-config]].
 
 ## Why
 "Not verifiable here" and "the evidence is gone" are different facts; conflating

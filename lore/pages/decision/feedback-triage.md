@@ -4,14 +4,14 @@ title: Feedback is triaged by a fixed rubric, kept in lore not CONTRIBUTING
 kind: decision
 status: active
 created: 2026-08-05
-updated: 2026-08-06
+updated: 2026-11-12
 provenance:
   agent: claude-code
   actor: fenriuz
   task: "triage review after third field report"
 sources:
   - path: CHANGELOG.md
-    sha: "1f3730e"
+    sha: "f47d56c"
     note: the field-report cycles that shaped the rubric
 ---
 
