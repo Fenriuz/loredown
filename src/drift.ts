@@ -5,6 +5,7 @@ import {
   blobAt,
   commitsTouchingSince,
   git,
+  isCheckout,
   pathExistsAtHead,
   repoRoot,
   shaResolvable,
@@ -144,8 +145,8 @@ export function driftLore(load: LoadResult, cwd: string): DriftResult {
     if (cached === undefined) {
       const checkout = resolve(repoBase, rel);
       if (!existsSync(checkout)) cached = { state: "missing", checkout };
-      else if (!git(checkout, ["rev-parse", "--git-dir"]).ok)
-        cached = { state: "not-git", checkout };
+      // The gate before ANY git command runs in a mapped directory (SPEC §16).
+      else if (!isCheckout(checkout)) cached = { state: "not-git", checkout };
       else cached = { state: "ok", checkout };
       repoStates.set(name, cached);
       if (cached.state === "not-git") {
@@ -153,7 +154,7 @@ export function driftLore(load: LoadResult, cwd: string): DriftResult {
           level: "error",
           code: "SRC_REPO",
           file: displayOf("config.yaml"),
-          message: `repos.${name}: "${rel}" exists but is not a git repository`,
+          message: `repos.${name}: "${rel}" exists but is not a git checkout (it has no .git entry of its own) — git is never run inside it`,
         });
       }
     }

@@ -10,7 +10,7 @@ import {
 import { basename, dirname, join, posix, relative, resolve } from "node:path";
 import { byteCompare } from "./findings.js";
 import { ParseError, splitFrontmatter, type YamlValue } from "./fm.js";
-import { git, headShortSha, pathExistsAtHead, repoRoot, userName } from "./git.js";
+import { git, headShortSha, isCheckout, pathExistsAtHead, repoRoot, userName } from "./git.js";
 import {
   allowedKinds,
   type Config,
@@ -270,7 +270,8 @@ export function importPages(
     if (cached === undefined) {
       const dir = resolve(repoBase, config.repos[name] as string);
       cached = null;
-      if (existsSync(dir) && git(dir, ["rev-parse", "--git-dir"]).ok) {
+      // Same gate as drift: never run git in a directory that is not a checkout (SPEC §16).
+      if (isCheckout(dir)) {
         const head = headShortSha(dir);
         if (head !== null) cached = { dir, sha: head };
       }

@@ -2,7 +2,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { pathSourceStatus } from "./drift.js";
 import { byteCompare } from "./findings.js";
-import { repoRoot } from "./git.js";
+import { isCheckout, repoRoot } from "./git.js";
 import type { LoadResult } from "./load.js";
 
 /** Render one PathSourceStatus for the trace report — same verdicts as drift, by construction. */
@@ -70,6 +70,10 @@ export function tracePage(load: LoadResult, id: string, cwd: string): string | n
         const checkout = resolve(dirname(load.loreDir), rel);
         if (!existsSync(checkout)) {
           unverifiable = `repo "${source.repo}" checkout not present — unverifiable here`;
+          gitCwd = null;
+        } else if (!isCheckout(checkout)) {
+          // Same gate as drift: never run git in a directory that is not a checkout (SPEC §16).
+          unverifiable = `repo "${source.repo}" directory is not a git checkout (no .git entry of its own) — git is never run inside it`;
           gitCwd = null;
         } else {
           gitCwd = checkout;

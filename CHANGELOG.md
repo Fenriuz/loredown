@@ -4,6 +4,40 @@ All notable changes to loredown are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and the project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.6.1] — 2026-11-12
+
+A security release. Upgrade, and re-run `loredown install <tool>` so the pinned
+adapter commands move to 0.6.1.
+
+### Security
+
+- **A `repos:` directory could make loredown run a program chosen by repository
+  content.** A directory mapped in `config.repos` was accepted whenever git
+  recognised it as a repository — and git recognises a *bare repository layout*
+  (`HEAD`, `config`, `objects/`, `refs/`) made of ordinary tracked files, then
+  obeys the `config` among them, including the keys that name programs to run.
+  A change that added such a directory, a `repos:` entry pointing at it and a
+  page citing it passed `lint` cleanly and made `drift` execute that program on
+  the machine of whoever ran it; `trace` and `import` ran git in the same
+  directory. The code path dates from the introduction of `repos:` (`drift` and
+  `trace` since 0.2.0, `import` since 0.3.0); it was reproduced on 0.6.0. It
+  broke a promise SPEC §15 already made — a pull request must not be able to
+  turn the CLI into an execution vector.
+
+  Fixed with two independent locks. A mapped directory is now a checkout only
+  if it carries its own `.git` entry — git refuses to track any path named
+  `.git`, so repository content cannot create one — and anything else that
+  exists there is an `SRC_REPO` error, with git never run inside it; `drift`,
+  `trace` and `import` share that one gate. And every git invocation now passes
+  `safe.bareRepository=explicit`, so git itself (≥ 2.38) refuses to adopt a bare
+  layout from the working directory.
+
+### Changed
+
+- A **bare repository** is no longer accepted as a `repos:` target (it was never
+  documented as one). Map a checkout: a clone, a linked worktree and a submodule
+  all qualify.
+
 ## [0.6.0] — 2026-08-06
 
 Driven by our own dogfooding this time: five consecutive cycles in this repo

@@ -1,2 +1,2 @@
 // Kept in sync with package.json; the test suite enforces the match.
-export const VERSION = "0.6.0";
+export const VERSION = "0.6.1";

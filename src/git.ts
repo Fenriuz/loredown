@@ -1,13 +1,25 @@
 import { execFileSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 
 export interface GitResult {
   ok: boolean;
   stdout: string;
 }
 
+/**
+ * Passed on every invocation (SPEC §16): git must never adopt a directory as a
+ * repository just because it is laid out like a bare one — ordinary tracked
+ * files can fake that layout, and git would then obey the `config` among them.
+ * Command-line scope is protected configuration, so the directory itself
+ * cannot override it. Honored by git >= 2.38; older git ignores the key, which
+ * is why `isCheckout` does not rely on it.
+ */
+const HARDENING = ["-c", "safe.bareRepository=explicit"];
+
 export function git(cwd: string, args: string[]): GitResult {
   try {
-    const stdout = execFileSync("git", args, {
+    const stdout = execFileSync("git", [...HARDENING, ...args], {
       cwd,
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
@@ -16,6 +28,19 @@ export function git(cwd: string, args: string[]): GitResult {
   } catch {
     return { ok: false, stdout: "" };
   }
+}
+
+/**
+ * Whether `dir` is a checkout loredown may run git inside (SPEC §9, §16). It
+ * must carry its own `.git` entry — a directory for a clone, a file for a
+ * worktree or submodule. Git refuses to track any path named `.git`, so
+ * repository content can never create one; it CAN create a bare-repository
+ * layout (HEAD, config, objects/, refs/), whose config would name programs
+ * for git to execute. Every `repos:` directory goes through this gate before
+ * any git command runs in it.
+ */
+export function isCheckout(dir: string): boolean {
+  return existsSync(join(dir, ".git")) && git(dir, ["rev-parse", "--git-dir"]).ok;
 }
 
 export function repoRoot(cwd: string): string | null {
